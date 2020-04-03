@@ -12,7 +12,10 @@
   "module": "index.mjs",
   "types": "index.d.ts",
   "scripts": {
-    "build": "tsc -p . && rollup -c",
+    "build": "npm-run-all -p typecheck build:*",
+    "build:mjs": "rollup -c",
+    "build:dts": "dts-bundle-generator --no-banner --inline-declare-externals -o index.d.ts src/index.ts",
+    "typecheck": "tsc -p .",
     "test": "node --harmony --es-module-specifier-resolution=node bin/dxf2svg.mjs sample/1.dxf"
   },
   "devDependencies": {
@@ -22,6 +25,8 @@
     "@babel/plugin-transform-react-jsx": "^7.9.4",
     "@babel/preset-typescript": "^7.9.0",
     "@rollup/plugin-node-resolve": "^7.1.1",
+    "dts-bundle-generator": "^4.0.0",
+    "npm-run-all": "^4.1.5",
     "rollup": "^2.3.2",
     "rollup-plugin-babel": "^4.4.0",
     "typescript": "^3.8.3"
