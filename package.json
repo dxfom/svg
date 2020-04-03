@@ -1,0 +1,35 @@
+{
+  "name": "@dxfom/svg",
+  "version": "0.0.0",
+  "description": "",
+  "private": true,
+  "license": "UNLICENSED",
+  "repository": "dxfom/svg",
+  "keywords": [
+    "dxf"
+  ],
+  "main": "index.mjs",
+  "module": "index.mjs",
+  "types": "index.d.ts",
+  "scripts": {
+    "build": "tsc -p . && rollup -c",
+    "test": "node --harmony --es-module-specifier-resolution=node bin/dxf2svg.mjs sample/1.dxf"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.9.0",
+    "@babel/plugin-proposal-nullish-coalescing-operator": "^7.8.3",
+    "@babel/plugin-proposal-optional-chaining": "^7.9.0",
+    "@babel/plugin-transform-react-jsx": "^7.9.4",
+    "@babel/preset-typescript": "^7.9.0",
+    "@rollup/plugin-node-resolve": "^7.1.1",
+    "rollup": "^2.3.2",
+    "rollup-plugin-babel": "^4.4.0",
+    "typescript": "^3.8.3"
+  },
+  "dependencies": {
+    "@dxfom/color": "github:dxfom/color",
+    "@dxfom/dxf": "github:dxfom/dxf",
+    "@dxfom/mtext": "github:dxfom/mtext",
+    "@dxfom/text": "github:dxfom/text"
+  }
+}

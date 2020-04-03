@@ -1,0 +1,8 @@
+import { DxfReadonly } from '@dxfom/dxf'
+
+export interface CreateSvgStringOptions {
+  readonly warn: (message: string, ...args: any[]) => void
+  readonly resolveColorIndex: (colorIndex: number) => string
+}
+
+export const createSvgString: (dxf: DxfReadonly, options?: Partial<CreateSvgStringOptions>) => string
