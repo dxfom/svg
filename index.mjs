@@ -156,18 +156,6 @@ const MTEXT_contents = (contents, i = 0) => {
   return restContents;
 };
 
-const mergeTransforms = (t1, t2) => {
-  if (!t1) {
-    return t2;
-  }
-
-  if (!t2) {
-    return t1;
-  }
-
-  return t1 + ' ' + t2;
-};
-
 const createEntitySvgMap = (dxf, options) => {
   const {
     warn,
@@ -227,11 +215,11 @@ const createEntitySvgMap = (dxf, options) => {
     return (_ltypeMap = ltypeMap[(_$ = getGroupCodeValue(entity, 6)) !== null && _$ !== void 0 ? _$ : (_layerMap = layerMap[getGroupCodeValue(entity, 8)]) === null || _layerMap === void 0 ? void 0 : _layerMap.ltype]) === null || _ltypeMap === void 0 ? void 0 : _ltypeMap.strokeDasharray;
   };
 
-  const extrusionTransform = entity => {
+  const extrusionStyle = entity => {
     const extrusionZ = +$trim(entity, 230);
 
     if (extrusionZ && Math.abs(extrusionZ + 1) < 1 / 64) {
-      return 'rotateY(180deg)';
+      return 'transform:rotateY(180deg)';
     }
   };
 
@@ -244,7 +232,7 @@ const createEntitySvgMap = (dxf, options) => {
       y2: $negate(entity, 21),
       stroke: color(entity),
       "stroke-dasharray": strokeDasharray(entity),
-      transform: extrusionTransform(entity)
+      style: extrusionStyle(entity)
     }),
     POLYLINE: (entity, vertices) => {
       var _$2;
@@ -264,7 +252,7 @@ const createEntitySvgMap = (dxf, options) => {
         d: d,
         stroke: color(entity),
         "stroke-dasharray": strokeDasharray(entity),
-        transform: extrusionTransform(entity)
+        style: extrusionStyle(entity)
       });
     },
     LWPOLYLINE: entity => {
@@ -287,7 +275,7 @@ const createEntitySvgMap = (dxf, options) => {
         d: d,
         stroke: color(entity),
         "stroke-dasharray": strokeDasharray(entity),
-        transform: extrusionTransform(entity)
+        style: extrusionStyle(entity)
       });
     },
     CIRCLE: entity => jsx("circle", {
@@ -296,7 +284,7 @@ const createEntitySvgMap = (dxf, options) => {
       r: $trim(entity, 40),
       stroke: color(entity),
       "stroke-dasharray": strokeDasharray(entity),
-      transform: extrusionTransform(entity)
+      style: extrusionStyle(entity)
     }),
     ARC: entity => {
       const cx = $number(entity, 10);
@@ -315,7 +303,7 @@ const createEntitySvgMap = (dxf, options) => {
         d: `M${x1} ${-y1}A${r} ${r} 0 ${large} 0 ${x2} ${-y2}`,
         stroke: color(entity),
         "stroke-dasharray": strokeDasharray(entity),
-        transform: extrusionTransform(entity)
+        style: extrusionStyle(entity)
       });
     },
     ELLIPSE: entity => {
@@ -327,11 +315,10 @@ const createEntitySvgMap = (dxf, options) => {
       const majorR = Math.sqrt(majorX * majorX + majorY * majorY);
       const minorR = $number(entity, 40) * majorR;
       const radAngleOffset = -Math.atan2(majorY, majorX);
-      const radAngle1 = $number(entity, 41, 0);
-      const radAngle2 = $number(entity, 42, 2 * Math.PI);
+      const rad1 = $number(entity, 41, 0);
+      const rad2 = $number(entity, 42, 2 * Math.PI);
 
-      if (nearlyEqual(radAngle1, 0) && nearlyEqual(radAngle2, 2 * Math.PI)) {
-        const rotation = radAngleOffset ? `rotate(${radAngleOffset * 180 / Math.PI} ${cx} ${-cy})` : '';
+      if (nearlyEqual(rad1, 0) && nearlyEqual(rad2, 2 * Math.PI)) {
         return jsx("ellipse", {
           cx: cx,
           cy: -cy,
@@ -339,7 +326,8 @@ const createEntitySvgMap = (dxf, options) => {
           ry: minorR,
           stroke: color(entity),
           "stroke-dasharray": strokeDasharray(entity),
-          transform: mergeTransforms(rotation, extrusionTransform(entity))
+          transform: radAngleOffset && `rotate(${radAngleOffset * 180 / Math.PI} ${cx} ${-cy})`,
+          style: extrusionStyle(entity)
         });
       } else {
         warn('Elliptical arc cannot be rendered yet.');
@@ -506,7 +494,7 @@ const createEntitySvgMap = (dxf, options) => {
       return jsx("g", {
         stroke: color(entity) || 'currentColor',
         "stroke-dasharray": strokeDasharray(entity),
-        transform: extrusionTransform(entity),
+        style: extrusionStyle(entity),
         children: lineElements + textElement
       });
     },

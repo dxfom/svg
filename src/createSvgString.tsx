@@ -95,16 +95,6 @@ const MTEXT_contents = (contents: readonly DxfMTextContentElement[], i = 0): str
   return restContents
 }
 
-const mergeTransforms = (t1: string | undefined, t2: string | undefined) => {
-  if (!t1) {
-    return t2
-  }
-  if (!t2) {
-    return t1
-  }
-  return t1 + ' ' + t2
-}
-
 const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgStringOptions) => Record<string, undefined | ((entity: DxfRecordReadonly, vertices: readonly DxfRecordReadonly[]) => string | undefined)> = (dxf, options) => {
   const { warn, resolveColorIndex } = options
   const layerMap: Record<string, undefined | { color: string; ltype?: string }> = {}
@@ -139,10 +129,10 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgStringOptions) =>
   const color = (entity: DxfRecordReadonly) => _color(entity) || 'currentColor'
 
   const strokeDasharray = (entity: DxfRecordReadonly) => ltypeMap[$(entity, 6) ?? layerMap[$(entity, 8)!]?.ltype!]?.strokeDasharray
-  const extrusionTransform = (entity: DxfRecordReadonly) => {
+  const extrusionStyle = (entity: DxfRecordReadonly) => {
     const extrusionZ = +$trim(entity, 230)!
     if (extrusionZ && Math.abs(extrusionZ + 1) < 1 / 64) {
-      return 'rotateY(180deg)'
+      return 'transform:rotateY(180deg)'
     }
   }
 
@@ -156,7 +146,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgStringOptions) =>
         y2={$negate(entity, 21)}
         stroke={color(entity)}
         stroke-dasharray={strokeDasharray(entity)}
-        transform={extrusionTransform(entity)}
+        style={extrusionStyle(entity)}
       />,
     POLYLINE: (entity, vertices) => {
       const flags = +($(entity, 70) ?? 0)
@@ -172,7 +162,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgStringOptions) =>
           d={d}
           stroke={color(entity)}
           stroke-dasharray={strokeDasharray(entity)}
-          transform={extrusionTransform(entity)}
+          style={extrusionStyle(entity)}
         />
       )
     },
@@ -192,7 +182,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgStringOptions) =>
           d={d}
           stroke={color(entity)}
           stroke-dasharray={strokeDasharray(entity)}
-          transform={extrusionTransform(entity)}
+          style={extrusionStyle(entity)}
         />
       )
     },
@@ -203,7 +193,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgStringOptions) =>
         r={$trim(entity, 40)}
         stroke={color(entity)}
         stroke-dasharray={strokeDasharray(entity)}
-        transform={extrusionTransform(entity)}
+        style={extrusionStyle(entity)}
     />,
     ARC: entity => {
       const cx = $number(entity, 10)
@@ -223,7 +213,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgStringOptions) =>
           d={`M${x1} ${-y1}A${r} ${r} 0 ${large} 0 ${x2} ${-y2}`}
           stroke={color(entity)}
           stroke-dasharray={strokeDasharray(entity)}
-          transform={extrusionTransform(entity)}
+          style={extrusionStyle(entity)}
         />
       )
     },
@@ -236,10 +226,9 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgStringOptions) =>
       const majorR = Math.sqrt(majorX * majorX + majorY * majorY)
       const minorR = $number(entity, 40)! * majorR
       const radAngleOffset = -Math.atan2(majorY, majorX)
-      const radAngle1 = $number(entity, 41, 0)
-      const radAngle2 = $number(entity, 42, 2 * Math.PI)
-      if (nearlyEqual(radAngle1, 0) && nearlyEqual(radAngle2, 2 * Math.PI)) {
-        const rotation = radAngleOffset ? `rotate(${radAngleOffset * 180 / Math.PI} ${cx} ${-cy})` : ''
+      const rad1 = $number(entity, 41, 0)
+      const rad2 = $number(entity, 42, 2 * Math.PI)
+      if (nearlyEqual(rad1, 0) && nearlyEqual(rad2, 2 * Math.PI)) {
         return (
           <ellipse
             cx={cx}
@@ -248,7 +237,8 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgStringOptions) =>
             ry={minorR}
             stroke={color(entity)}
             stroke-dasharray={strokeDasharray(entity)}
-            transform={mergeTransforms(rotation, extrusionTransform(entity))}
+            transform={radAngleOffset && `rotate(${radAngleOffset * 180 / Math.PI} ${cx} ${-cy})`}
+            style={extrusionStyle(entity)}
           />
         )
       } else {
@@ -400,7 +390,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgStringOptions) =>
         <g
           stroke={color(entity) || 'currentColor'}
           stroke-dasharray={strokeDasharray(entity)}
-          transform={extrusionTransform(entity)}
+          style={extrusionStyle(entity)}
         >
           {lineElements + textElement}
         </g>
