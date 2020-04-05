@@ -49,14 +49,40 @@ const textDecorations = ({ k, o, u }: DxfTextContentElement) => {
   return decorations.join(' ')
 }
 
-
-const _MTEXT_dominantBaselines = [, 'text-before-edge', 'central', 'text-after-edge']
-const MTEXT_dominantBaseline = (n: string | number | undefined) => _MTEXT_dominantBaselines[(+n! / 3) | 0]
-const _MTEXT_textAnchors = [, , 'middle', 'end']
-const MTEXT_textAnchor = (n: string | number | undefined) => _MTEXT_textAnchors[(+n! | 0) % 3]
-
 const TEXT_dominantBaseline = [, 'text-after-edge', 'central', 'text-before-edge']
 const TEXT_textAnchor = [, 'middle', 'end', , 'middle']
+
+const MTEXT_attachmentPoint = (n: string | number | undefined) => {
+  n = +n!
+  let dominantBaseline: string | undefined
+  let textAnchor: string | undefined
+  switch (n) {
+    case 1:
+    case 2:
+    case 3:
+      dominantBaseline = 'text-before-edge'
+      break
+    case 4:
+    case 5:
+    case 6:
+      dominantBaseline = 'central'
+      break
+    case 7:
+    case 8:
+    case 9:
+      dominantBaseline = 'text-after-edge'
+      break
+  }
+  switch (n % 3) {
+    case 2:
+      textAnchor = 'middle'
+      break
+    case 3:
+      textAnchor = 'end'
+      break
+  }
+  return { dominantBaseline, textAnchor }
+}
 
 const MTEXT_contents = (contents: readonly DxfMTextContentElement[], i = 0): string => {
   if (contents.length <= i) {
@@ -319,15 +345,15 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgStringOptions) =>
       )
     },
     MTEXT: entity => {
-      const attachmentPoint = $trim(entity, 71)
+      const { dominantBaseline, textAnchor } = MTEXT_attachmentPoint($trim(entity, 71))
       return (
         <text
           fill={color(entity)}
           x={$trim(entity, 10)}
           y={$negate(entity, 20)}
           font-size={$trim(entity, 40)}
-          dominant-baseline={MTEXT_dominantBaseline(attachmentPoint)}
-          text-anchor={MTEXT_textAnchor(attachmentPoint)}
+          dominant-baseline={dominantBaseline}
+          text-anchor={textAnchor}
         >
           {MTEXT_contents(parseDxfMTextContent($$(entity, 3).join('') + ($(entity, 1) ?? '')))}
         </text>

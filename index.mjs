@@ -98,16 +98,49 @@ const textDecorations = ({
   return decorations.join(' ');
 };
 
-const _MTEXT_dominantBaselines = [, 'text-before-edge', 'central', 'text-after-edge'];
-
-const MTEXT_dominantBaseline = n => _MTEXT_dominantBaselines[+n / 3 | 0];
-
-const _MTEXT_textAnchors = [,, 'middle', 'end'];
-
-const MTEXT_textAnchor = n => _MTEXT_textAnchors[(+n | 0) % 3];
-
 const TEXT_dominantBaseline = [, 'text-after-edge', 'central', 'text-before-edge'];
 const TEXT_textAnchor = [, 'middle', 'end',, 'middle'];
+
+const MTEXT_attachmentPoint = n => {
+  n = +n;
+  let dominantBaseline;
+  let textAnchor;
+
+  switch (n) {
+    case 1:
+    case 2:
+    case 3:
+      dominantBaseline = 'text-before-edge';
+      break;
+
+    case 4:
+    case 5:
+    case 6:
+      dominantBaseline = 'central';
+      break;
+
+    case 7:
+    case 8:
+    case 9:
+      dominantBaseline = 'text-after-edge';
+      break;
+  }
+
+  switch (n % 3) {
+    case 2:
+      textAnchor = 'middle';
+      break;
+
+    case 3:
+      textAnchor = 'end';
+      break;
+  }
+
+  return {
+    dominantBaseline,
+    textAnchor
+  };
+};
 
 const MTEXT_contents = (contents, i = 0) => {
   if (contents.length <= i) {
@@ -411,14 +444,17 @@ const createEntitySvgMap = (dxf, options) => {
     MTEXT: entity => {
       var _$4;
 
-      const attachmentPoint = $trim(entity, 71);
+      const {
+        dominantBaseline,
+        textAnchor
+      } = MTEXT_attachmentPoint($trim(entity, 71));
       return jsx("text", {
         fill: color(entity),
         x: $trim(entity, 10),
         y: $negate(entity, 20),
         "font-size": $trim(entity, 40),
-        "dominant-baseline": MTEXT_dominantBaseline(attachmentPoint),
-        "text-anchor": MTEXT_textAnchor(attachmentPoint),
+        "dominant-baseline": dominantBaseline,
+        "text-anchor": textAnchor,
         children: MTEXT_contents(parseDxfMTextContent(getGroupCodeValues(entity, 3).join('') + ((_$4 = getGroupCodeValue(entity, 1)) !== null && _$4 !== void 0 ? _$4 : '')))
       });
     },

@@ -1,4 +1,4 @@
-type JSXElement<T extends string> = { readonly [K in T]?: string | number }
+export type JSXElement<T extends string> = { readonly [K in T]?: string | number }
 
 declare global {
   namespace JSX {
@@ -17,4 +17,3 @@ declare global {
   }
 }
 
-export {}
