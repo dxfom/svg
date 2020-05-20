@@ -1,7 +1,43 @@
-import { DXF_COLOR_HEX } from '@dxfom/color/hex';
 import { getGroupCodeValue, getGroupCodeValues } from '@dxfom/dxf';
+import { DXF_COLOR_HEX } from '@dxfom/color/hex';
 import { parseDxfMTextContent } from '@dxfom/mtext';
 import { parseDxfTextContent } from '@dxfom/text';
+
+const isNotNaN = n => !isNaN(n);
+
+const calculateViewBox = ({
+  ENTITIES
+}) => {
+  if (!ENTITIES) {
+    return {
+      x: 0,
+      y: 0,
+      w: 0,
+      h: 0
+    };
+  }
+
+  let minX = Infinity;
+  let maxX = -Infinity;
+  let minY = Infinity;
+  let maxY = -Infinity;
+
+  for (const entity of ENTITIES) {
+    const xs = [+getGroupCodeValue(entity, 10), +getGroupCodeValue(entity, 11), +getGroupCodeValue(entity, 12)].filter(isNotNaN);
+    const ys = [-getGroupCodeValue(entity, 20), -getGroupCodeValue(entity, 21), -getGroupCodeValue(entity, 22)].filter(isNotNaN);
+    minX = Math.min(minX, ...xs);
+    maxX = Math.max(maxX, ...xs);
+    minY = Math.min(minY, ...ys);
+    maxY = Math.max(maxY, ...ys);
+  }
+
+  return {
+    x: minX,
+    y: minY,
+    w: maxX - minX,
+    h: maxY - minY
+  };
+};
 
 const escapeHtml = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -633,32 +669,6 @@ const createEntitySvgMap = (dxf, options) => {
   };
 };
 
-const isNotNaN = n => !isNaN(n);
-
-const viewBox = ({
-  ENTITIES
-}) => {
-  if (!ENTITIES) {
-    return '';
-  }
-
-  let minX = Infinity;
-  let maxX = -Infinity;
-  let minY = Infinity;
-  let maxY = -Infinity;
-
-  for (const entity of ENTITIES) {
-    const xs = [+getGroupCodeValue(entity, 10), +getGroupCodeValue(entity, 11), +getGroupCodeValue(entity, 12)].filter(isNotNaN);
-    const ys = [-getGroupCodeValue(entity, 20), -getGroupCodeValue(entity, 21), -getGroupCodeValue(entity, 22)].filter(isNotNaN);
-    minX = Math.min(minX, ...xs);
-    maxX = Math.max(maxX, ...xs);
-    minY = Math.min(minY, ...ys);
-    maxY = Math.max(maxY, ...ys);
-  }
-
-  return `${minX} ${minY} ${maxX - minX} ${maxY - minY}`;
-};
-
 const entitiesToSvgString = (dxf, entities, options) => {
   const {
     warn
@@ -698,15 +708,27 @@ const entitiesToSvgString = (dxf, entities, options) => {
   return s;
 };
 
-const createSvgString = (dxf, options) => {
+const createSvgContentsString = (dxf, options) => {
   const resolvedOptions = options ? { ...defaultOptions,
     ...options
   } : defaultOptions;
+  return entitiesToSvgString(dxf, dxf.ENTITIES, resolvedOptions);
+};
+
+const createSvgString = (dxf, options) => {
+  const {
+    x,
+    y,
+    w,
+    h
+  } = calculateViewBox(dxf);
   return jsx("svg", {
     xmlns: "http://www.w3.org/2000/svg",
-    viewBox: viewBox(dxf),
-    children: entitiesToSvgString(dxf, dxf.ENTITIES, resolvedOptions)
+    viewBox: `${x} ${y} ${w} ${h}`,
+    width: w,
+    height: h,
+    children: createSvgContentsString(dxf, options)
   });
 };
 
-export { createSvgString };
+export { calculateViewBox, createSvgContentsString, createSvgString };

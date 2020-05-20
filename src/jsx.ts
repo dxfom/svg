@@ -5,7 +5,7 @@ declare global {
     type Element = string
 
     interface IntrinsicElements {
-      svg: JSXElement<'xmlns' | 'viewBox'>
+      svg: JSXElement<'xmlns' | 'viewBox' | 'width' | 'height'>
       g: JSXElement<'color' | 'stroke' | 'transform' | 'style'>
       path: JSXElement<'d' | 'stroke' | 'fill' | 'style'>
       line: JSXElement<'x1' | 'y1' | 'x2' | 'y2' | 'stroke' | 'style'>
