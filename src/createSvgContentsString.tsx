@@ -38,6 +38,10 @@ const $number = (record: DxfRecordReadonly | undefined, groupCode: number, defau
   return defaultValue
 }
 
+const commonAttributes = (entity: DxfRecordReadonly) => ({
+  'data-5': $trim(entity, 5)
+})
+
 const textDecorations = ({ k, o, u }: DxfTextContentElement) => {
   const decorations = []
   k && decorations.push('line-through')
@@ -163,6 +167,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
     POINT: () => '',
     LINE: entity =>
       <line
+        {...commonAttributes(entity)}
         x1={$trim(entity, 10)}
         y1={$negate(entity, 20)}
         x2={$trim(entity, 11)}
@@ -182,6 +187,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       }
       return (
         <path
+          {...commonAttributes(entity)}
           d={d}
           stroke={color(entity)}
           stroke-dasharray={strokeDasharray(entity)}
@@ -202,6 +208,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       }
       return (
         <path
+          {...commonAttributes(entity)}
           d={d}
           stroke={color(entity)}
           stroke-dasharray={strokeDasharray(entity)}
@@ -211,6 +218,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
     },
     CIRCLE: entity =>
       <circle
+        {...commonAttributes(entity)}
         cx={$trim(entity, 10)}
         cy={$negate(entity, 20)}
         r={$trim(entity, 40)}
@@ -233,6 +241,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const large = (deg2 - deg1 + 360) % 360 <= 180 ? '0' : '1'
       return (
         <path
+          {...commonAttributes(entity)}
           d={`M${x1} ${-y1}A${r} ${r} 0 ${large} 0 ${x2} ${-y2}`}
           stroke={color(entity)}
           stroke-dasharray={strokeDasharray(entity)}
@@ -254,6 +263,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       if (nearlyEqual(rad1, 0) && nearlyEqual(rad2, 2 * Math.PI)) {
         return (
           <ellipse
+            {...commonAttributes(entity)}
             cx={cx}
             cy={-cy}
             rx={majorR}
@@ -278,6 +288,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       }
       return (
         <path
+          {...commonAttributes(entity)}
           d={d}
           stroke={color(entity)}
           stroke-dasharray={strokeDasharray(entity)}
@@ -303,7 +314,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           d += `M${x1s[i]} ${y1s[i]}L${x2s[i]} ${y2s[i]}`
         }
       }
-      return <path fill={color(entity) || 'currentColor'} fill-opacity='.3' d={d} />
+      return <path {...commonAttributes(entity)} d={d} fill={color(entity) || 'currentColor'} fill-opacity='.3' />
     },
     SOLID: entity => {
       const x1 = $trim(entity, 10)
@@ -315,7 +326,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const x4 = $trim(entity, 13)
       const y4 = $negate(entity, 23)
       const d = `M${x1} ${y1}L${x2} ${y2}L${x3} ${y3}${x3 !== x4 || y3 !== y4 ? `L${x4} ${y4}` : ''}Z`
-      return <path d={d} fill={color(entity)} />
+      return <path {...commonAttributes(entity)} d={d} fill={color(entity)} />
     },
     TEXT: entity => {
       const x = $trim(entity, 10)
@@ -324,10 +335,11 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const contents = parseDxfTextContent($(entity, 1) || '')
       return (
         <text
+          {...commonAttributes(entity)}
           x={x}
           y={y}
-          font-size={$trim(entity, 40)}
           fill={color(entity)}
+          font-size={$trim(entity, 40)}
           dominant-baseline={TEXT_dominantBaseline[$trim(entity, 73) as string & number]}
           text-anchor={TEXT_textAnchor[$trim(entity, 72) as string & number]}
           transform={angle && `rotate(${angle} ${x} ${y})`}
@@ -345,9 +357,10 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const { dominantBaseline, textAnchor } = MTEXT_attachmentPoint($trim(entity, 71))
       return (
         <text
-          fill={color(entity)}
+          {...commonAttributes(entity)}
           x={$trim(entity, 10)}
           y={$negate(entity, 20)}
+          fill={color(entity)}
           font-size={$trim(entity, 40)}
           dominant-baseline={dominantBaseline}
           text-anchor={textAnchor}
@@ -400,8 +413,8 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           <text
             x={x}
             y={y}
-            font-size={h}
             fill={color(entity)}
+            font-size={h}
             dominant-baseline='text-after-edge'
             text-anchor='middle'
             transform={angle && `rotate(${angle} ${x} ${y})`}
@@ -411,6 +424,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       }
       return (
         <g
+          {...commonAttributes(entity)}
           stroke={color(entity) || 'currentColor'}
           stroke-dasharray={strokeDasharray(entity)}
           style={extrusionStyle(entity)}
@@ -472,6 +486,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
         />
       return (
         <g
+          {...commonAttributes(entity)}
           font-size={$trim(entity, 140)}
           dominant-baseline='text-before-edge'
           transform={`translate(${$trim(entity, 10)},${$negate(entity, 20)})`}
@@ -497,7 +512,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
         $(_block[_block.length - 1], 0) === 'ENDBLK' ? -1 : undefined,
       )
       const contents = entitiesToSvgString(dxf, block, options)
-      return <g color={_color(entity)} transform={transform}>{contents}</g>
+      return <g {...commonAttributes(entity)} color={_color(entity)} transform={transform}>{contents}</g>
     },
   }
 }

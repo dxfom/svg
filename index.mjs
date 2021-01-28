@@ -122,6 +122,10 @@ const $number = (record, groupCode, defaultValue) => {
   return defaultValue;
 };
 
+const commonAttributes = entity => ({
+  'data-5': $trim(entity, 5)
+});
+
 const textDecorations = ({
   k,
   o,
@@ -294,7 +298,7 @@ const createEntitySvgMap = (dxf, options) => {
 
   return {
     POINT: () => '',
-    LINE: entity => jsx("line", {
+    LINE: entity => jsx("line", { ...commonAttributes(entity),
       x1: $trim(entity, 10),
       y1: $negate(entity, 20),
       x2: $trim(entity, 11),
@@ -317,7 +321,7 @@ const createEntitySvgMap = (dxf, options) => {
         d += 'Z';
       }
 
-      return jsx("path", {
+      return jsx("path", { ...commonAttributes(entity),
         d: d,
         stroke: color(entity),
         "stroke-dasharray": strokeDasharray(entity),
@@ -340,14 +344,14 @@ const createEntitySvgMap = (dxf, options) => {
         d += 'Z';
       }
 
-      return jsx("path", {
+      return jsx("path", { ...commonAttributes(entity),
         d: d,
         stroke: color(entity),
         "stroke-dasharray": strokeDasharray(entity),
         style: extrusionStyle(entity)
       });
     },
-    CIRCLE: entity => jsx("circle", {
+    CIRCLE: entity => jsx("circle", { ...commonAttributes(entity),
       cx: $trim(entity, 10),
       cy: $negate(entity, 20),
       r: $trim(entity, 40),
@@ -368,7 +372,7 @@ const createEntitySvgMap = (dxf, options) => {
       const x2 = cx + r * Math.cos(rad2);
       const y2 = cy + r * Math.sin(rad2);
       const large = (deg2 - deg1 + 360) % 360 <= 180 ? '0' : '1';
-      return jsx("path", {
+      return jsx("path", { ...commonAttributes(entity),
         d: `M${x1} ${-y1}A${r} ${r} 0 ${large} 0 ${x2} ${-y2}`,
         stroke: color(entity),
         "stroke-dasharray": strokeDasharray(entity),
@@ -388,7 +392,7 @@ const createEntitySvgMap = (dxf, options) => {
       const rad2 = $number(entity, 42, 2 * Math.PI);
 
       if (nearlyEqual(rad1, 0) && nearlyEqual(rad2, 2 * Math.PI)) {
-        return jsx("ellipse", {
+        return jsx("ellipse", { ...commonAttributes(entity),
           cx: cx,
           cy: -cy,
           rx: majorR,
@@ -412,7 +416,7 @@ const createEntitySvgMap = (dxf, options) => {
         d += `${d ? 'L' : 'M'}${trim(xs[i])} ${negate(trim(ys[i]))}`;
       }
 
-      return jsx("path", {
+      return jsx("path", { ...commonAttributes(entity),
         d: d,
         stroke: color(entity),
         "stroke-dasharray": strokeDasharray(entity)
@@ -436,10 +440,10 @@ const createEntitySvgMap = (dxf, options) => {
         }
       }
 
-      return jsx("path", {
+      return jsx("path", { ...commonAttributes(entity),
+        d: d,
         fill: color(entity) || 'currentColor',
-        "fill-opacity": ".3",
-        d: d
+        "fill-opacity": ".3"
       });
     },
     SOLID: entity => {
@@ -452,7 +456,7 @@ const createEntitySvgMap = (dxf, options) => {
       const x4 = $trim(entity, 13);
       const y4 = $negate(entity, 23);
       const d = `M${x1} ${y1}L${x2} ${y2}L${x3} ${y3}${x3 !== x4 || y3 !== y4 ? `L${x4} ${y4}` : ''}Z`;
-      return jsx("path", {
+      return jsx("path", { ...commonAttributes(entity),
         d: d,
         fill: color(entity)
       });
@@ -462,11 +466,11 @@ const createEntitySvgMap = (dxf, options) => {
       const y = $negate(entity, 20);
       const angle = $negate(entity, 50);
       const contents = parseDxfTextContent(getGroupCodeValue(entity, 1) || '');
-      return jsx("text", {
+      return jsx("text", { ...commonAttributes(entity),
         x: x,
         y: y,
-        "font-size": $trim(entity, 40),
         fill: color(entity),
+        "font-size": $trim(entity, 40),
         "dominant-baseline": TEXT_dominantBaseline[$trim(entity, 73)],
         "text-anchor": TEXT_textAnchor[$trim(entity, 72)],
         transform: angle && `rotate(${angle} ${x} ${y})`,
@@ -484,10 +488,10 @@ const createEntitySvgMap = (dxf, options) => {
         dominantBaseline,
         textAnchor
       } = MTEXT_attachmentPoint($trim(entity, 71));
-      return jsx("text", {
-        fill: color(entity),
+      return jsx("text", { ...commonAttributes(entity),
         x: $trim(entity, 10),
         y: $negate(entity, 20),
+        fill: color(entity),
         "font-size": $trim(entity, 40),
         "dominant-baseline": dominantBaseline,
         "text-anchor": textAnchor,
@@ -555,15 +559,15 @@ const createEntitySvgMap = (dxf, options) => {
         textElement = jsx("text", {
           x: x,
           y: y,
-          "font-size": h,
           fill: color(entity),
+          "font-size": h,
           "dominant-baseline": "text-after-edge",
           "text-anchor": "middle",
           transform: angle && `rotate(${angle} ${x} ${y})`,
           children: MTEXT_contents(parseDxfMTextContent(text))
         });
       }
-      return jsx("g", {
+      return jsx("g", { ...commonAttributes(entity),
         stroke: color(entity) || 'currentColor',
         "stroke-dasharray": strokeDasharray(entity),
         style: extrusionStyle(entity),
@@ -639,7 +643,7 @@ const createEntitySvgMap = (dxf, options) => {
         y2: ys[ys.length - 1],
         stroke: lineColor
       });
-      return jsx("g", {
+      return jsx("g", { ...commonAttributes(entity),
         "font-size": $trim(entity, 140),
         "dominant-baseline": "text-before-edge",
         transform: `translate(${$trim(entity, 10)},${$negate(entity, 20)})`,
@@ -660,7 +664,7 @@ const createEntitySvgMap = (dxf, options) => {
 
       const block = _block === null || _block === void 0 ? void 0 : _block.slice(getGroupCodeValue(_block[0], 0) === 'BLOCK' ? 1 : 0, getGroupCodeValue(_block[_block.length - 1], 0) === 'ENDBLK' ? -1 : undefined);
       const contents = entitiesToSvgString(dxf, block, options);
-      return jsx("g", {
+      return jsx("g", { ...commonAttributes(entity),
         color: _color(entity),
         transform: transform,
         children: contents
