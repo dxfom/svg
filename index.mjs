@@ -467,8 +467,8 @@ const createEntitySvgMap = (dxf, options) => {
         y: y,
         "font-size": $trim(entity, 40),
         fill: color(entity),
-        "dominant-baseline": TEXT_dominantBaseline[$trim(entity, 72)],
-        "text-anchor": TEXT_textAnchor[$trim(entity, 73)],
+        "dominant-baseline": TEXT_dominantBaseline[$trim(entity, 73)],
+        "text-anchor": TEXT_textAnchor[$trim(entity, 72)],
         transform: angle && `rotate(${angle} ${x} ${y})`,
         "text-decoration": contents.length === 1 && textDecorations(contents[0]),
         children: contents.length === 1 ? contents[0].text : contents.map(content => jsx("tspan", {

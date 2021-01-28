@@ -328,8 +328,8 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           y={y}
           font-size={$trim(entity, 40)}
           fill={color(entity)}
-          dominant-baseline={TEXT_dominantBaseline[$trim(entity, 72) as string & number]}
-          text-anchor={TEXT_textAnchor[$trim(entity, 73) as string & number]}
+          dominant-baseline={TEXT_dominantBaseline[$trim(entity, 73) as string & number]}
+          text-anchor={TEXT_textAnchor[$trim(entity, 72) as string & number]}
           transform={angle && `rotate(${angle} ${x} ${y})`}
           text-decoration={contents.length === 1 && textDecorations(contents[0])}
         >
