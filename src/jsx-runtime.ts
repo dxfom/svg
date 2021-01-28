@@ -1,5 +1,3 @@
-import './jsx'
-
 const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
 
 export const jsx = (type: string, props: Record<string, unknown>) => {

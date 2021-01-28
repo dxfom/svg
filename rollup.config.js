@@ -22,6 +22,7 @@ export default {
           '@babel/plugin-transform-react-jsx',
           {
             runtime: 'automatic',
+            importSource: '.',
           },
         ],
       ],

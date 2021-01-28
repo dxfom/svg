@@ -1,6 +1,3 @@
-/** @jsxImportSource . */
-import { jsx } from './jsx-runtime'
-
 import { DxfReadonly } from '@dxfom/dxf'
 import { calculateViewBox } from './calculateViewBox'
 import { createSvgContentsString, CreateSvgContentStringOptions } from './createSvgContentsString'

@@ -1,6 +1,3 @@
-/** @jsxImportSource . */
-import { jsx } from './jsx-runtime'
-
 import { DXF_COLOR_HEX } from '@dxfom/color/hex'
 import { DxfReadonly, DxfRecordReadonly, getGroupCodeValue as $, getGroupCodeValues as $$ } from '@dxfom/dxf'
 import { DxfMTextContentElement, parseDxfMTextContent } from '@dxfom/mtext'
