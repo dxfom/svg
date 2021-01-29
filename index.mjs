@@ -171,7 +171,7 @@ const MTEXT_attachmentPoint = n => {
       textAnchor = 'middle';
       break;
 
-    case 3:
+    case 0:
       textAnchor = 'end';
       break;
   }

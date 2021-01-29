@@ -78,7 +78,7 @@ const MTEXT_attachmentPoint = (n: string | number | undefined) => {
     case 2:
       textAnchor = 'middle'
       break
-    case 3:
+    case 0:
       textAnchor = 'end'
       break
   }
