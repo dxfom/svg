@@ -204,7 +204,8 @@ const MTEXT_contents = (contents, i = 0) => {
         dy: "-.5em",
         children: content.S[0]
       }), jsx("tspan", {
-        dy: ".5em",
+        dy: "1em",
+        dx: content.S[0].length / -2 + 'em',
         children: content.S[2]
       })]
     }) + restContents;
@@ -504,9 +505,16 @@ const createEntitySvgMap = (dxf, options) => {
       const styleName = getGroupCodeValue(entity, 3);
       const style = (_dxf$TABLES3 = dxf.TABLES) === null || _dxf$TABLES3 === void 0 ? void 0 : (_dxf$TABLES3$DIMSTYLE = _dxf$TABLES3.DIMSTYLE) === null || _dxf$TABLES3$DIMSTYLE === void 0 ? void 0 : _dxf$TABLES3$DIMSTYLE.find(style => getGroupCodeValue(style, 2) === styleName);
       let lineElements = '';
-      let value = $number(entity, 42, 0);
+      let value = $number(entity, 42, NaN);
+      let dominantBaseline = 'text-after-edge';
+      let textAnchor = 'middle';
+      let angle;
+      value === -1 && (value = NaN);
+      const tx = $trim(entity, 11);
+      const ty = $negate(entity, 21);
+      const dimensionType = $number(entity, 70, 0);
 
-      switch ($number(entity, 70, 0) & 7) {
+      switch (dimensionType & 7) {
         case 0: // Rotated, Horizontal, or Vertical
 
         case 1:
@@ -523,6 +531,7 @@ const createEntitySvgMap = (dxf, options) => {
             lineElements = jsx("path", {
               d: `M${x1} ${y1}L${x2} ${y2}L${x3} ${y3}L${x4} ${y4}`
             });
+            angle = $negate(entity, 50);
             break;
           }
 
@@ -542,8 +551,31 @@ const createEntitySvgMap = (dxf, options) => {
 
         case 6:
           // Ordinate
-          warn('Ordinate dimension cannot be rendered yet.', entity);
-          break;
+          {
+            const x0 = $number(entity, 10);
+            const y0 = -$number(entity, 20);
+            const x1 = $trim(entity, 13);
+            const y1 = $negate(entity, 23);
+            const x2 = $trim(entity, 14);
+            const y2 = $negate(entity, 24);
+
+            if (dimensionType & 64) {
+              value = value || Math.abs(x0 - +x1) * $number(style, 144, 1);
+              lineElements = jsx("path", {
+                d: `M${x1} ${y1}L${x1} ${y2}L${x2} ${y2}L${tx} ${ty}`
+              });
+              angle = -90;
+            } else {
+              value = value || Math.abs(y0 - +y1) * $number(style, 144, 1);
+              lineElements = jsx("path", {
+                d: `M${x1} ${y1}L${x2} ${y1}L${x2} ${y2}L${tx} ${ty}`
+              });
+            }
+
+            dominantBaseline = 'central';
+            textAnchor = 'middle';
+            break;
+          }
       }
 
       value = round(value, +getGroupCodeValue(style, 271) || +getGroupCodeValue((_dxf$HEADER = dxf.HEADER) === null || _dxf$HEADER === void 0 ? void 0 : _dxf$HEADER.$DIMDEC, 70) || 4);
@@ -551,19 +583,31 @@ const createEntitySvgMap = (dxf, options) => {
       {
         var _dxf$HEADER2, _dxf$HEADER3, _$$replace, _$5;
 
-        const x = $trim(entity, 11);
-        const y = $negate(entity, 21);
         const h = (+getGroupCodeValue(style, 140) || +getGroupCodeValue((_dxf$HEADER2 = dxf.HEADER) === null || _dxf$HEADER2 === void 0 ? void 0 : _dxf$HEADER2.$DIMTXT, 40)) * (+getGroupCodeValue(style, 40) || +getGroupCodeValue((_dxf$HEADER3 = dxf.HEADER) === null || _dxf$HEADER3 === void 0 ? void 0 : _dxf$HEADER3.$DIMSCALE, 40) || 1);
-        const angle = $negate(entity, 50);
-        const text = (_$$replace = (_$5 = getGroupCodeValue(entity, 1)) === null || _$5 === void 0 ? void 0 : _$5.replace(/<>/, value)) !== null && _$$replace !== void 0 ? _$$replace : String(value);
+        let valueWithTolerance = String(value);
+
+        if (+getGroupCodeValue(style, 71)) {
+          const p = $trim(style, 47);
+          const n = $trim(style, 48);
+
+          if (p || n) {
+            if (p === n) {
+              valueWithTolerance = `${value}  ±${p}`;
+            } else {
+              valueWithTolerance = `${value}  {\\S${p ? '+' + p : ' 0'}^${negate(n) || ' 0'};}`;
+            }
+          }
+        }
+
+        const text = (_$$replace = (_$5 = getGroupCodeValue(entity, 1)) === null || _$5 === void 0 ? void 0 : _$5.replace(/<>/, valueWithTolerance)) !== null && _$$replace !== void 0 ? _$$replace : valueWithTolerance;
         textElement = jsx("text", {
-          x: x,
-          y: y,
+          x: tx,
+          y: ty,
           fill: color(entity),
           "font-size": h,
-          "dominant-baseline": "text-after-edge",
-          "text-anchor": "middle",
-          transform: angle && `rotate(${angle} ${x} ${y})`,
+          "dominant-baseline": dominantBaseline,
+          "text-anchor": textAnchor,
+          transform: angle && `rotate(${angle} ${tx} ${ty})`,
           children: MTEXT_contents(parseDxfMTextContent(text))
         });
       }

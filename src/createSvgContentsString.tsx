@@ -101,7 +101,7 @@ const MTEXT_contents = (contents: readonly DxfMTextContentElement[], i = 0): str
     return (
       <tspan>
         <tspan dy='-.5em'>{content.S[0]}</tspan>
-        <tspan dy='.5em'>{content.S[2]}</tspan>
+        <tspan dy='1em' dx={content.S[0].length / -2 + 'em'}>{content.S[2]}</tspan>
       </tspan>
     ) + restContents
   }
@@ -373,8 +373,15 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const styleName = $(entity, 3)
       const style = dxf.TABLES?.DIMSTYLE?.find(style => $(style, 2) === styleName)
       let lineElements = ''
-      let value = $number(entity, 42, 0)
-      switch ($number(entity, 70, 0) & 7) {
+      let value = $number(entity, 42, NaN)
+      let dominantBaseline = 'text-after-edge'
+      let textAnchor = 'middle'
+      let angle
+      value === -1 && (value = NaN)
+      const tx = $trim(entity, 11)
+      const ty = $negate(entity, 21)
+      const dimensionType = $number(entity, 70, 0)
+      switch (dimensionType & 7) {
         case 0: // Rotated, Horizontal, or Vertical
         case 1: // Aligned
         {
@@ -387,6 +394,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           const [x2, y2] = x3 === x4 ? [x1, y3] : [x3, y1]
           value = value || (Math.abs(x3 === x4 ? +y3! - +y1! : +x3! - +x1!) * $number(style, 144, 1))
           lineElements = <path d={`M${x1} ${y1}L${x2} ${y2}L${x3} ${y3}L${x4} ${y4}`} />
+          angle = $negate(entity, 50)
           break
         }
         case 2: // Angular
@@ -398,26 +406,52 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           warn('Diameter / radius dimension cannot be rendered yet.', entity)
           break
         case 6: // Ordinate
-          warn('Ordinate dimension cannot be rendered yet.', entity)
+        {
+          const x0 = $number(entity, 10)
+          const y0 = -$number(entity, 20)
+          const x1 = $trim(entity, 13)
+          const y1 = $negate(entity, 23)
+          const x2 = $trim(entity, 14)
+          const y2 = $negate(entity, 24)
+          if (dimensionType & 64) {
+            value = value || Math.abs(x0 - +x1!) * $number(style, 144, 1)
+            lineElements = <path d={`M${x1} ${y1}L${x1} ${y2}L${x2} ${y2}L${tx} ${ty}`} />
+            angle = -90
+          } else {
+            value = value || Math.abs(y0 - +y1!) * $number(style, 144, 1)
+            lineElements = <path d={`M${x1} ${y1}L${x2} ${y1}L${x2} ${y2}L${tx} ${ty}`} />
+          }
+          dominantBaseline = 'central'
+          textAnchor = 'middle'
           break
+        }
       }
       value = round(value, +$(style, 271)! || +$(dxf.HEADER?.$DIMDEC, 70)! || 4)
       let textElement: string
       {
-        const x = $trim(entity, 11)
-        const y = $negate(entity, 21)
         const h = (+$(style, 140)! || +$(dxf.HEADER?.$DIMTXT, 40)!) * (+$(style, 40)! || +$(dxf.HEADER?.$DIMSCALE, 40)! || 1)
-        const angle = $negate(entity, 50)
-        const text = $(entity, 1)?.replace(/<>/, value as string & number) ?? String(value)
+        let valueWithTolerance = String(value)
+        if (+$(style, 71)!) {
+          const p = $trim(style, 47)
+          const n = $trim(style, 48)
+          if (p || n) {
+            if (p === n) {
+              valueWithTolerance = `${value}  ±${p}`
+            } else {
+              valueWithTolerance = `${value}  {\\S${p ? '+' + p : ' 0'}^${negate(n) || ' 0'};}`
+            }
+          }
+        }
+        const text = $(entity, 1)?.replace(/<>/, valueWithTolerance) ?? valueWithTolerance
         textElement =
           <text
-            x={x}
-            y={y}
+            x={tx}
+            y={ty}
             fill={color(entity)}
             font-size={h}
-            dominant-baseline='text-after-edge'
-            text-anchor='middle'
-            transform={angle && `rotate(${angle} ${x} ${y})`}
+            dominant-baseline={dominantBaseline}
+            text-anchor={textAnchor}
+            transform={angle && `rotate(${angle} ${tx} ${ty})`}
           >
             {MTEXT_contents(parseDxfMTextContent(text))}
           </text>
