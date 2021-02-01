@@ -79,6 +79,26 @@ const jsx = (type, props) => {
 };
 const jsxs = jsx;
 
+const collectDimensionStyleOverrides = d => {
+  const result = new Map();
+
+  for (let i = 0; i < d.length; i++) {
+    if (d[i][0] === 1000 && d[i][1].trim() === 'DSTYLE' && d[i + 1][0] === 1002 && d[i + 1][1].trim() === '{') {
+      for (let j = i + 2; j < d.length; j++) {
+        if (d[j][0] === 1002) {
+          break;
+        }
+
+        if (d[j][0] === 1070) {
+          result.set(+d[j][1], d[++j][1]);
+        }
+      }
+
+      return result;
+    }
+  }
+};
+
 const smallNumber = 1 / 64;
 const nearlyEqual = (a, b) => Math.abs(a - b) < smallNumber;
 const round = (() => {
@@ -520,13 +540,21 @@ const createEntitySvgMap = (dxf, options) => {
 
       const styleName = getGroupCodeValue(entity, 3);
       const style = (_dxf$TABLES3 = dxf.TABLES) === null || _dxf$TABLES3 === void 0 ? void 0 : (_dxf$TABLES3$DIMSTYLE = _dxf$TABLES3.DIMSTYLE) === null || _dxf$TABLES3$DIMSTYLE === void 0 ? void 0 : _dxf$TABLES3$DIMSTYLE.find(style => getGroupCodeValue(style, 2) === styleName);
+      const styleOverrides = collectDimensionStyleOverrides(entity);
+
+      const $style = (key, defaultValue) => {
+        var _ref, _styleOverrides$get;
+
+        return +((_ref = (_styleOverrides$get = styleOverrides === null || styleOverrides === void 0 ? void 0 : styleOverrides.get(key)) !== null && _styleOverrides$get !== void 0 ? _styleOverrides$get : getGroupCodeValue(style, key)) !== null && _ref !== void 0 ? _ref : defaultValue);
+      };
+
       let lineElements = '';
       let value = $number(entity, 42, NaN);
       let dominantBaseline = 'text-after-edge';
       let textAnchor = 'middle';
       let angle;
       value === -1 && (value = NaN);
-      const factor = $number(style, 144, 1);
+      const factor = $style(144, 1);
       const tx = $trim(entity, 11);
       const ty = $negate(entity, 21);
       const dimensionType = $number(entity, 70, 0);
@@ -604,33 +632,34 @@ const createEntitySvgMap = (dxf, options) => {
           }
       }
 
-      value = round(value, +getGroupCodeValue(style, 271) || +getGroupCodeValue((_dxf$HEADER = dxf.HEADER) === null || _dxf$HEADER === void 0 ? void 0 : _dxf$HEADER.$DIMDEC, 70) || 4);
+      value = round(value, $style(271, 0) || +getGroupCodeValue((_dxf$HEADER = dxf.HEADER) === null || _dxf$HEADER === void 0 ? void 0 : _dxf$HEADER.$DIMDEC, 70) || 4);
       let textElement;
       {
         var _dxf$HEADER2, _dxf$HEADER3;
 
-        const h = (+getGroupCodeValue(style, 140) || +getGroupCodeValue((_dxf$HEADER2 = dxf.HEADER) === null || _dxf$HEADER2 === void 0 ? void 0 : _dxf$HEADER2.$DIMTXT, 40)) * (+getGroupCodeValue(style, 40) || +getGroupCodeValue((_dxf$HEADER3 = dxf.HEADER) === null || _dxf$HEADER3 === void 0 ? void 0 : _dxf$HEADER3.$DIMSCALE, 40) || 1);
+        const h = ($style(140, 0) || +getGroupCodeValue((_dxf$HEADER2 = dxf.HEADER) === null || _dxf$HEADER2 === void 0 ? void 0 : _dxf$HEADER2.$DIMTXT, 40)) * ($style(40, 0) || +getGroupCodeValue((_dxf$HEADER3 = dxf.HEADER) === null || _dxf$HEADER3 === void 0 ? void 0 : _dxf$HEADER3.$DIMSCALE, 40) || 1);
         let valueWithTolerance = String(value);
 
-        if (+getGroupCodeValue(style, 71)) {
-          const p = $trim(style, 47);
-          const n = $trim(style, 48);
+        if ($style(71, 0)) {
+          const p = $style(47, 0);
+          const n = $style(48, 0);
 
           if (p || n) {
             if (p === n) {
               valueWithTolerance = `${value}  ±${p}`;
             } else {
-              valueWithTolerance = `${value}  {\\S${p ? '+' + p : ' 0'}^${negate(n) || ' 0'};}`;
+              valueWithTolerance = `${value}  {\\S${p ? '+' + p : ' 0'}^${-n || ' 0'};}`;
             }
           }
         }
 
         const template = getGroupCodeValue(entity, 1);
         const text = template ? decodeDxfTextCharacterCodes(template, options === null || options === void 0 ? void 0 : options.encoding).replace(/<>/, valueWithTolerance) : valueWithTolerance;
+        const textColor = $style(178, NaN);
         textElement = jsx("text", {
           x: tx,
           y: ty,
-          fill: color(entity),
+          fill: isNaN(textColor) ? color(entity) : textColor === 0 ? 'currentColor' : resolveColorIndex(textColor),
           "font-size": h,
           "dominant-baseline": dominantBaseline,
           "text-anchor": textAnchor,

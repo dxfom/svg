@@ -2,6 +2,7 @@ import { DXF_COLOR_HEX } from '@dxfom/color/hex'
 import { DxfReadonly, DxfRecordReadonly, getGroupCodeValue as $, getGroupCodeValues as $$ } from '@dxfom/dxf'
 import { parseDxfMTextContent } from '@dxfom/mtext'
 import { decodeDxfTextCharacterCodes, DxfTextContentElement, parseDxfTextContent } from '@dxfom/text'
+import { collectDimensionStyleOverrides } from './dstyle'
 import { MTEXT_angle, MTEXT_attachmentPoint, MTEXT_contents } from './mtext'
 import { $negate, $number, $trim, nearlyEqual, negate, round, trim } from './util'
 
@@ -285,13 +286,15 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
     DIMENSION: entity => {
       const styleName = $(entity, 3)
       const style = dxf.TABLES?.DIMSTYLE?.find(style => $(style, 2) === styleName)
+      const styleOverrides = collectDimensionStyleOverrides(entity)
+      const $style = (key: number, defaultValue: number) => +(styleOverrides?.get(key) ?? $(style, key) ?? defaultValue)
       let lineElements = ''
       let value = $number(entity, 42, NaN)
       let dominantBaseline = 'text-after-edge'
       let textAnchor = 'middle'
       let angle
       value === -1 && (value = NaN)
-      const factor = $number(style, 144, 1)
+      const factor = $style(144, 1)
       const tx = $trim(entity, 11)
       const ty = $negate(entity, 21)
       const dimensionType = $number(entity, 70, 0)
@@ -345,19 +348,19 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           break
         }
       }
-      value = round(value, +$(style, 271)! || +$(dxf.HEADER?.$DIMDEC, 70)! || 4)
+      value = round(value, $style(271, 0) || +$(dxf.HEADER?.$DIMDEC, 70)! || 4)
       let textElement: string
       {
-        const h = (+$(style, 140)! || +$(dxf.HEADER?.$DIMTXT, 40)!) * (+$(style, 40)! || +$(dxf.HEADER?.$DIMSCALE, 40)! || 1)
+        const h = ($style(140, 0) || +$(dxf.HEADER?.$DIMTXT, 40)!) * ($style(40, 0) || +$(dxf.HEADER?.$DIMSCALE, 40)! || 1)
         let valueWithTolerance = String(value)
-        if (+$(style, 71)!) {
-          const p = $trim(style, 47)
-          const n = $trim(style, 48)
+        if ($style(71, 0)) {
+          const p = $style(47, 0)
+          const n = $style(48, 0)
           if (p || n) {
             if (p === n) {
               valueWithTolerance = `${value}  ±${p}`
             } else {
-              valueWithTolerance = `${value}  {\\S${p ? '+' + p : ' 0'}^${negate(n) || ' 0'};}`
+              valueWithTolerance = `${value}  {\\S${p ? '+' + p : ' 0'}^${-n || ' 0'};}`
             }
           }
         }
@@ -365,11 +368,12 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
         const text = template
           ? decodeDxfTextCharacterCodes(template, options?.encoding).replace(/<>/, valueWithTolerance)
           : valueWithTolerance
+        const textColor = $style(178, NaN)
         textElement =
           <text
             x={tx}
             y={ty}
-            fill={color(entity)}
+            fill={isNaN(textColor) ? color(entity) : textColor === 0 ? 'currentColor' : resolveColorIndex(textColor)}
             font-size={h}
             dominant-baseline={dominantBaseline}
             text-anchor={textAnchor}
