@@ -79,18 +79,8 @@ const jsx = (type, props) => {
 };
 const jsxs = jsx;
 
-const defaultOptions = {
-  warn: console.debug,
-  resolveColorIndex: index => {
-    var _DXF_COLOR_HEX$index;
-
-    return (_DXF_COLOR_HEX$index = DXF_COLOR_HEX[index]) !== null && _DXF_COLOR_HEX$index !== void 0 ? _DXF_COLOR_HEX$index : '#888';
-  }
-};
 const smallNumber = 1 / 64;
-
 const nearlyEqual = (a, b) => Math.abs(a - b) < smallNumber;
-
 const round = (() => {
   const _shift = (n, precision) => {
     const [d, e] = ('' + n).split('e');
@@ -99,15 +89,10 @@ const round = (() => {
 
   return (n, precision) => _shift(Math.round(_shift(n, precision)), -precision);
 })();
-
 const trim = s => s ? s.trim() : s;
-
 const negate = s => !s ? s : s.startsWith('-') ? s.slice(1) : '-' + s;
-
 const $trim = (record, groupCode) => trim(getGroupCodeValue(record, groupCode));
-
 const $negate = (record, groupCode) => negate(trim(getGroupCodeValue(record, groupCode)));
-
 const $number = (record, groupCode, defaultValue) => {
   const value = +getGroupCodeValue(record, groupCode);
 
@@ -121,25 +106,6 @@ const $number = (record, groupCode, defaultValue) => {
 
   return defaultValue;
 };
-
-const commonAttributes = entity => ({
-  'data-5': $trim(entity, 5)
-});
-
-const textDecorations = ({
-  k,
-  o,
-  u
-}) => {
-  const decorations = [];
-  k && decorations.push('line-through');
-  o && decorations.push('overline');
-  u && decorations.push('underline');
-  return decorations.join(' ');
-};
-
-const TEXT_dominantBaseline = [, 'text-after-edge', 'central', 'text-before-edge'];
-const TEXT_textAnchor = [, 'middle', 'end',, 'middle'];
 
 const MTEXT_attachmentPoint = n => {
   n = +n;
@@ -182,6 +148,24 @@ const MTEXT_attachmentPoint = n => {
   };
 };
 
+const yx2angle = (y, x) => round(Math.atan2(y || 0, x || 0) * 180 / Math.PI, 5) || 0;
+
+const MTEXT_angle = mtext => {
+  for (let i = mtext.length - 1; i >= 0; i--) {
+    switch (mtext[i][0]) {
+      case 50:
+        return round(+mtext[i][1], 5) || 0;
+
+      case 11:
+        return yx2angle($number(mtext, 12), +mtext[i][1]);
+
+      case 21:
+        return yx2angle(+mtext[i][1], $number(mtext, 11));
+    }
+  }
+
+  return 0;
+};
 const MTEXT_contents = (contents, i = 0) => {
   if (contents.length <= i) {
     return '';
@@ -229,6 +213,34 @@ const MTEXT_contents = (contents, i = 0) => {
 
   return restContents;
 };
+
+const defaultOptions = {
+  warn: console.debug,
+  resolveColorIndex: index => {
+    var _DXF_COLOR_HEX$index;
+
+    return (_DXF_COLOR_HEX$index = DXF_COLOR_HEX[index]) !== null && _DXF_COLOR_HEX$index !== void 0 ? _DXF_COLOR_HEX$index : '#888';
+  }
+};
+
+const commonAttributes = entity => ({
+  'data-5': $trim(entity, 5)
+});
+
+const textDecorations = ({
+  k,
+  o,
+  u
+}) => {
+  const decorations = [];
+  k && decorations.push('line-through');
+  o && decorations.push('overline');
+  u && decorations.push('underline');
+  return decorations.join(' ');
+};
+
+const TEXT_dominantBaseline = [, 'text-after-edge', 'central', 'text-before-edge'];
+const TEXT_textAnchor = [, 'middle', 'end',, 'middle'];
 
 const createEntitySvgMap = (dxf, options) => {
   const {
@@ -485,17 +497,21 @@ const createEntitySvgMap = (dxf, options) => {
     MTEXT: entity => {
       var _$4;
 
+      const x = $trim(entity, 10);
+      const y = $negate(entity, 20);
+      const angle = MTEXT_angle(entity);
       const {
         dominantBaseline,
         textAnchor
       } = MTEXT_attachmentPoint($trim(entity, 71));
       return jsx("text", { ...commonAttributes(entity),
-        x: $trim(entity, 10),
-        y: $negate(entity, 20),
+        x: x,
+        y: y,
         fill: color(entity),
         "font-size": $trim(entity, 40),
         "dominant-baseline": dominantBaseline,
         "text-anchor": textAnchor,
+        transform: angle ? `rotate(${-angle} ${x} ${y})` : undefined,
         children: MTEXT_contents(parseDxfMTextContent(getGroupCodeValues(entity, 3).join('') + ((_$4 = getGroupCodeValue(entity, 1)) !== null && _$4 !== void 0 ? _$4 : '')))
       });
     },

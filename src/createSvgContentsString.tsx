@@ -1,7 +1,9 @@
 import { DXF_COLOR_HEX } from '@dxfom/color/hex'
 import { DxfReadonly, DxfRecordReadonly, getGroupCodeValue as $, getGroupCodeValues as $$ } from '@dxfom/dxf'
-import { DxfMTextContentElement, parseDxfMTextContent } from '@dxfom/mtext'
+import { parseDxfMTextContent } from '@dxfom/mtext'
 import { DxfTextContentElement, parseDxfTextContent } from '@dxfom/text'
+import { MTEXT_angle, MTEXT_attachmentPoint, MTEXT_contents } from './mtext'
+import { $negate, $number, $trim, nearlyEqual, negate, round, trim } from './util'
 
 export interface CreateSvgContentStringOptions {
   readonly warn: (message: string, ...args: any[]) => void
@@ -11,31 +13,6 @@ export interface CreateSvgContentStringOptions {
 const defaultOptions: CreateSvgContentStringOptions = {
   warn: console.debug,
   resolveColorIndex: (index: number) => DXF_COLOR_HEX[index] ?? '#888',
-}
-
-const smallNumber = 1 / 64
-const nearlyEqual = (a: number, b: number) => Math.abs(a - b) < smallNumber
-const round = (() => {
-  const _shift = (n: number, precision: number): number => {
-    const [d, e] = ('' + n).split('e')
-    return +(d + 'e' + (e ? +e + precision : precision))
-  }
-  return (n: number, precision: number) => _shift(Math.round(_shift(n, precision)), -precision)
-})()
-
-const trim = (s: string | undefined) => s ? s.trim() : s
-const negate = (s: string | undefined) => !s ? s : s.startsWith('-') ? s.slice(1) : '-' + s
-const $trim = (record: DxfRecordReadonly | undefined, groupCode: number) => trim($(record, groupCode))
-const $negate = (record: DxfRecordReadonly | undefined, groupCode: number) => negate(trim($(record, groupCode)))
-const $number = (record: DxfRecordReadonly | undefined, groupCode: number, defaultValue?: number) => {
-  const value = +$(record, groupCode)!
-  if (!isNaN(value)) {
-    return value
-  }
-  if (defaultValue === undefined) {
-    return NaN
-  }
-  return defaultValue
 }
 
 const commonAttributes = (entity: DxfRecordReadonly) => ({
@@ -52,75 +29,6 @@ const textDecorations = ({ k, o, u }: DxfTextContentElement) => {
 
 const TEXT_dominantBaseline = [, 'text-after-edge', 'central', 'text-before-edge']
 const TEXT_textAnchor = [, 'middle', 'end', , 'middle']
-
-const MTEXT_attachmentPoint = (n: string | number | undefined) => {
-  n = +n!
-  let dominantBaseline: string | undefined
-  let textAnchor: string | undefined
-  switch (n) {
-    case 1:
-    case 2:
-    case 3:
-      dominantBaseline = 'text-before-edge'
-      break
-    case 4:
-    case 5:
-    case 6:
-      dominantBaseline = 'central'
-      break
-    case 7:
-    case 8:
-    case 9:
-      dominantBaseline = 'text-after-edge'
-      break
-  }
-  switch (n % 3) {
-    case 2:
-      textAnchor = 'middle'
-      break
-    case 0:
-      textAnchor = 'end'
-      break
-  }
-  return { dominantBaseline, textAnchor }
-}
-
-const MTEXT_contents = (contents: readonly DxfMTextContentElement[], i = 0): string => {
-  if (contents.length <= i) {
-    return ''
-  }
-  const restContents = MTEXT_contents(contents, i + 1)
-  const content = contents[i]
-  if (typeof content === 'string') {
-    return content + restContents
-  }
-  if (Array.isArray(content)) {
-    return MTEXT_contents(content) + restContents
-  }
-  if (content.S) {
-    return (
-      <tspan>
-        <tspan dy='-.5em'>{content.S[0]}</tspan>
-        <tspan dy='1em' dx={content.S[0].length / -2 + 'em'}>{content.S[2]}</tspan>
-      </tspan>
-    ) + restContents
-  }
-  if (content.f) {
-    return (
-      <tspan
-        font-family={content.f}
-        font-weight={content.b && 'bold'}
-        font-style={content.i && 'italic'}
-      >
-        {restContents}
-      </tspan>
-    )
-  }
-  if (content.Q) {
-    return <tspan font-style={`oblique ${content.Q}deg`}>{restContents}</tspan>
-  }
-  return restContents
-}
 
 const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOptions) => Record<string, undefined | ((entity: DxfRecordReadonly, vertices: readonly DxfRecordReadonly[]) => string | undefined)> = (dxf, options) => {
   const { warn, resolveColorIndex } = options
@@ -354,16 +262,20 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       )
     },
     MTEXT: entity => {
+      const x = $trim(entity, 10)
+      const y = $negate(entity, 20)
+      const angle = MTEXT_angle(entity)
       const { dominantBaseline, textAnchor } = MTEXT_attachmentPoint($trim(entity, 71))
       return (
         <text
           {...commonAttributes(entity)}
-          x={$trim(entity, 10)}
-          y={$negate(entity, 20)}
+          x={x}
+          y={y}
           fill={color(entity)}
           font-size={$trim(entity, 40)}
           dominant-baseline={dominantBaseline}
           text-anchor={textAnchor}
+          transform={angle ? `rotate(${-angle} ${x} ${y})` : undefined}
         >
           {MTEXT_contents(parseDxfMTextContent($$(entity, 3).join('') + ($(entity, 1) ?? '')))}
         </text>
