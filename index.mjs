@@ -526,6 +526,7 @@ const createEntitySvgMap = (dxf, options) => {
       let textAnchor = 'middle';
       let angle;
       value === -1 && (value = NaN);
+      const factor = $number(style, 144, 1);
       const tx = $trim(entity, 11);
       const ty = $negate(entity, 21);
       const dimensionType = $number(entity, 70, 0);
@@ -538,16 +539,25 @@ const createEntitySvgMap = (dxf, options) => {
           {
             const x1 = $trim(entity, 13);
             const y1 = $negate(entity, 23);
-            const x3 = $trim(entity, 10);
-            const y3 = $negate(entity, 20);
-            const x4 = $trim(entity, 14);
-            const y4 = $negate(entity, 24);
-            const [x2, y2] = x3 === x4 ? [x1, y3] : [x3, y1];
-            value = value || Math.abs(x3 === x4 ? +y3 - +y1 : +x3 - +x1) * $number(style, 144, 1);
-            lineElements = jsx("path", {
-              d: `M${x1} ${y1}L${x2} ${y2}L${x3} ${y3}L${x4} ${y4}`
-            });
-            angle = $negate(entity, 50);
+            const x2 = $trim(entity, 14);
+            const y2 = $negate(entity, 24);
+            angle = Math.round(-$number(entity, 50) || 0);
+
+            if (angle % 180 === 0) {
+              const y0 = $negate(entity, 20);
+              value = value || Math.abs(+x1 - +x2) * factor;
+              lineElements = jsx("path", {
+                d: `M${x1} ${y1}L${x1} ${y0}L${x2} ${y0}L${x2} ${y2}`
+              });
+              angle = 0;
+            } else {
+              const x0 = $trim(entity, 10);
+              value = value || Math.abs(+y1 - +y2) * factor;
+              lineElements = jsx("path", {
+                d: `M${x1} ${y1}L${x0} ${y1}L${x0} ${y2}L${x2} ${y2}`
+              });
+            }
+
             break;
           }
 
@@ -568,21 +578,21 @@ const createEntitySvgMap = (dxf, options) => {
         case 6:
           // Ordinate
           {
-            const x0 = $number(entity, 10);
-            const y0 = -$number(entity, 20);
             const x1 = $trim(entity, 13);
             const y1 = $negate(entity, 23);
             const x2 = $trim(entity, 14);
             const y2 = $negate(entity, 24);
 
             if (dimensionType & 64) {
-              value = value || Math.abs(x0 - +x1) * $number(style, 144, 1);
+              const x0 = $number(entity, 10);
+              value = value || Math.abs(x0 - +x1) * factor;
               lineElements = jsx("path", {
                 d: `M${x1} ${y1}L${x1} ${y2}L${x2} ${y2}L${tx} ${ty}`
               });
               angle = -90;
             } else {
-              value = value || Math.abs(y0 - +y1) * $number(style, 144, 1);
+              const y0 = -$number(entity, 20);
+              value = value || Math.abs(y0 - +y1) * factor;
               lineElements = jsx("path", {
                 d: `M${x1} ${y1}L${x2} ${y1}L${x2} ${y2}L${tx} ${ty}`
               });
