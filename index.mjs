@@ -1,7 +1,7 @@
 import { getGroupCodeValue, getGroupCodeValues } from '@dxfom/dxf';
 import { DXF_COLOR_HEX } from '@dxfom/color/hex';
 import { parseDxfMTextContent } from '@dxfom/mtext';
-import { parseDxfTextContent } from '@dxfom/text';
+import { parseDxfTextContent, decodeDxfTextCharacterCodes } from '@dxfom/text';
 
 const isNotNaN = n => !isNaN(n);
 
@@ -478,7 +478,7 @@ const createEntitySvgMap = (dxf, options) => {
       const x = $trim(entity, 10);
       const y = $negate(entity, 20);
       const angle = $negate(entity, 50);
-      const contents = parseDxfTextContent(getGroupCodeValue(entity, 1) || '');
+      const contents = parseDxfTextContent(getGroupCodeValue(entity, 1) || '', options);
       return jsx("text", { ...commonAttributes(entity),
         x: x,
         y: y,
@@ -512,7 +512,7 @@ const createEntitySvgMap = (dxf, options) => {
         "dominant-baseline": dominantBaseline,
         "text-anchor": textAnchor,
         transform: angle ? `rotate(${-angle} ${x} ${y})` : undefined,
-        children: MTEXT_contents(parseDxfMTextContent(getGroupCodeValues(entity, 3).join('') + ((_$4 = getGroupCodeValue(entity, 1)) !== null && _$4 !== void 0 ? _$4 : '')))
+        children: MTEXT_contents(parseDxfMTextContent(getGroupCodeValues(entity, 3).join('') + ((_$4 = getGroupCodeValue(entity, 1)) !== null && _$4 !== void 0 ? _$4 : ''), options))
       });
     },
     DIMENSION: entity => {
@@ -597,7 +597,7 @@ const createEntitySvgMap = (dxf, options) => {
       value = round(value, +getGroupCodeValue(style, 271) || +getGroupCodeValue((_dxf$HEADER = dxf.HEADER) === null || _dxf$HEADER === void 0 ? void 0 : _dxf$HEADER.$DIMDEC, 70) || 4);
       let textElement;
       {
-        var _dxf$HEADER2, _dxf$HEADER3, _$$replace, _$5;
+        var _dxf$HEADER2, _dxf$HEADER3;
 
         const h = (+getGroupCodeValue(style, 140) || +getGroupCodeValue((_dxf$HEADER2 = dxf.HEADER) === null || _dxf$HEADER2 === void 0 ? void 0 : _dxf$HEADER2.$DIMTXT, 40)) * (+getGroupCodeValue(style, 40) || +getGroupCodeValue((_dxf$HEADER3 = dxf.HEADER) === null || _dxf$HEADER3 === void 0 ? void 0 : _dxf$HEADER3.$DIMSCALE, 40) || 1);
         let valueWithTolerance = String(value);
@@ -615,7 +615,8 @@ const createEntitySvgMap = (dxf, options) => {
           }
         }
 
-        const text = (_$$replace = (_$5 = getGroupCodeValue(entity, 1)) === null || _$5 === void 0 ? void 0 : _$5.replace(/<>/, valueWithTolerance)) !== null && _$$replace !== void 0 ? _$$replace : valueWithTolerance;
+        const template = getGroupCodeValue(entity, 1);
+        const text = template ? decodeDxfTextCharacterCodes(template, options === null || options === void 0 ? void 0 : options.encoding).replace(/<>/, valueWithTolerance) : valueWithTolerance;
         textElement = jsx("text", {
           x: tx,
           y: ty,
@@ -680,13 +681,13 @@ const createEntitySvgMap = (dxf, options) => {
         if ($trim(cell, 171) === '2') {
           warn('Table cell type "block" cannot be rendered yet.', entity, cell);
         } else {
-          var _$6;
+          var _$5;
 
           s += jsx("text", {
             x: x,
             y: y,
             fill: !isNaN(color) ? resolveColorIndex(color) : textColor,
-            children: MTEXT_contents(parseDxfMTextContent((_$6 = getGroupCodeValue(cell, 1)) !== null && _$6 !== void 0 ? _$6 : ''))
+            children: MTEXT_contents(parseDxfMTextContent((_$5 = getGroupCodeValue(cell, 1)) !== null && _$5 !== void 0 ? _$5 : ''))
           });
         }
 

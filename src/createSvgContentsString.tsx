@@ -1,13 +1,14 @@
 import { DXF_COLOR_HEX } from '@dxfom/color/hex'
 import { DxfReadonly, DxfRecordReadonly, getGroupCodeValue as $, getGroupCodeValues as $$ } from '@dxfom/dxf'
 import { parseDxfMTextContent } from '@dxfom/mtext'
-import { DxfTextContentElement, parseDxfTextContent } from '@dxfom/text'
+import { decodeDxfTextCharacterCodes, DxfTextContentElement, parseDxfTextContent } from '@dxfom/text'
 import { MTEXT_angle, MTEXT_attachmentPoint, MTEXT_contents } from './mtext'
 import { $negate, $number, $trim, nearlyEqual, negate, round, trim } from './util'
 
 export interface CreateSvgContentStringOptions {
   readonly warn: (message: string, ...args: any[]) => void
   readonly resolveColorIndex: (colorIndex: number) => string
+  readonly encoding?: string | TextDecoder
 }
 
 const defaultOptions: CreateSvgContentStringOptions = {
@@ -240,7 +241,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const x = $trim(entity, 10)
       const y = $negate(entity, 20)
       const angle = $negate(entity, 50)
-      const contents = parseDxfTextContent($(entity, 1) || '')
+      const contents = parseDxfTextContent($(entity, 1) || '', options)
       return (
         <text
           {...commonAttributes(entity)}
@@ -277,7 +278,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           text-anchor={textAnchor}
           transform={angle ? `rotate(${-angle} ${x} ${y})` : undefined}
         >
-          {MTEXT_contents(parseDxfMTextContent($$(entity, 3).join('') + ($(entity, 1) ?? '')))}
+          {MTEXT_contents(parseDxfMTextContent($$(entity, 3).join('') + ($(entity, 1) ?? ''), options))}
         </text>
       )
     },
@@ -354,7 +355,10 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
             }
           }
         }
-        const text = $(entity, 1)?.replace(/<>/, valueWithTolerance) ?? valueWithTolerance
+        const template = $(entity, 1)
+        const text = template
+          ? decodeDxfTextCharacterCodes(template, options?.encoding).replace(/<>/, valueWithTolerance)
+          : valueWithTolerance
         textElement =
           <text
             x={tx}

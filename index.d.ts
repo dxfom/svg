@@ -9,6 +9,7 @@ export declare const calculateViewBox: ({ ENTITIES }: DxfReadonly) => {
 export interface CreateSvgContentStringOptions {
 	readonly warn: (message: string, ...args: any[]) => void;
 	readonly resolveColorIndex: (colorIndex: number) => string;
+	readonly encoding?: string | TextDecoder;
 }
 export declare const createSvgContentsString: (dxf: DxfReadonly, options?: Partial<CreateSvgContentStringOptions> | undefined) => string;
 export declare const createSvgString: (dxf: DxfReadonly, options?: Partial<CreateSvgContentStringOptions> | undefined) => string;
