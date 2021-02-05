@@ -19,6 +19,9 @@ export const $number = (record: DxfRecordReadonly | undefined, groupCode: number
   if (isNaN(value)) {
     return defaultValue === undefined ? NaN : defaultValue
   }
+  if (Math.abs(value) > 1e6) {
+    throw Error(`group code ${groupCode} is invalid (${value})`)
+  }
   const rounded = Math.round(value)
   return Math.abs(rounded - value) < smallNumber ? rounded : value
 }
