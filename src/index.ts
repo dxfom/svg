@@ -1,4 +1,3 @@
 import './jsx'
-export * from './calculateViewBox'
-export * from './createSvgContentsString'
+export * from './createSvgContents'
 export * from './createSvgString'

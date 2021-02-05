@@ -1,9 +1,8 @@
 import { DxfReadonly } from '@dxfom/dxf'
-import { calculateViewBox } from './calculateViewBox'
-import { createSvgContentsString, CreateSvgContentStringOptions } from './createSvgContentsString'
+import { createSvgContents, CreateSvgContentStringOptions } from './createSvgContents'
 
 export const createSvgString = (dxf: DxfReadonly, options?: Partial<CreateSvgContentStringOptions>) => {
-  const { x, y, w, h } = calculateViewBox(dxf)
+  const [s, { x, y, w, h }] = createSvgContents(dxf, options)
   return (
     <svg
       xmlns='http://www.w3.org/2000/svg'
@@ -11,7 +10,7 @@ export const createSvgString = (dxf: DxfReadonly, options?: Partial<CreateSvgCon
       width={w}
       height={h}
     >
-      {createSvgContentsString(dxf, options)}
+      {s}
     </svg>
   )
 }

@@ -16,11 +16,13 @@ export const $trim = (record: DxfRecordReadonly | undefined, groupCode: number) 
 export const $negate = (record: DxfRecordReadonly | undefined, groupCode: number) => negate(trim($(record, groupCode)))
 export const $number = (record: DxfRecordReadonly | undefined, groupCode: number, defaultValue?: number) => {
   const value = +$(record, groupCode)!
-  if (!isNaN(value)) {
-    return value
+  if (isNaN(value)) {
+    return defaultValue === undefined ? NaN : defaultValue
   }
-  if (defaultValue === undefined) {
-    return NaN
-  }
-  return defaultValue
+  const rounded = Math.round(value)
+  return Math.abs(rounded - value) < smallNumber ? rounded : value
 }
+export const $numbers = (record: DxfRecordReadonly, ...groupCodes: readonly number[]) => groupCodes.map(groupCode => $number(record, groupCode))
+export const $negates = (record: DxfRecordReadonly, ...groupCodes: readonly number[]) => groupCodes.map(groupCode => -$number(record, groupCode))
+
+export const norm = (x: number, y: number) => Math.sqrt(x * x + y * y)

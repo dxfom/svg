@@ -4,7 +4,7 @@ import { parseDxfMTextContent } from '@dxfom/mtext'
 import { decodeDxfTextCharacterCodes, DxfTextContentElement, parseDxfTextContent } from '@dxfom/text'
 import { collectDimensionStyleOverrides } from './dstyle'
 import { MTEXT_angle, MTEXT_attachmentPoint, MTEXT_contents } from './mtext'
-import { $negate, $number, $trim, nearlyEqual, negate, round, trim } from './util'
+import { $negate, $negates, $number, $numbers, $trim, nearlyEqual, norm, round, trim } from './util'
 
 export interface CreateSvgContentStringOptions {
   readonly warn: (message: string, ...args: any[]) => void
@@ -32,7 +32,22 @@ const textDecorations = ({ k, o, u }: DxfTextContentElement) => {
 const TEXT_dominantBaseline = [, 'text-after-edge', 'central', 'text-before-edge']
 const TEXT_textAnchor = [, 'middle', 'end', , 'middle']
 
-const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOptions) => Record<string, undefined | ((entity: DxfRecordReadonly, vertices: readonly DxfRecordReadonly[]) => string | undefined)> = (dxf, options) => {
+interface CreateEntitySvgMapResult {
+  [entityType: string]: (entity: DxfRecordReadonly, vertices: readonly DxfRecordReadonly[]) => [string, number[], number[]] | undefined
+}
+
+const polylinePath = (xs: readonly number[], ys: readonly number[], close?: unknown) => {
+  let d = ''
+  for (let i = 0; i < xs.length; i++) {
+    d += `${d ? 'L' : 'M'}${xs[i]} ${ys[i]}`
+  }
+  if (close) {
+    d += 'Z'
+  }
+  return d
+}
+
+const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOptions) => CreateEntitySvgMapResult = (dxf, options) => {
   const { warn, resolveColorIndex } = options
   const layerMap: Record<string, undefined | { color: string; ltype?: string }> = {}
   for (const layer of dxf.TABLES?.LAYER ?? []) {
@@ -74,72 +89,75 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
   }
 
   return {
-    POINT: () => '',
-    LINE: entity =>
-      <line
-        {...commonAttributes(entity)}
-        x1={$trim(entity, 10)}
-        y1={$negate(entity, 20)}
-        x2={$trim(entity, 11)}
-        y2={$negate(entity, 21)}
-        stroke={color(entity)}
-        stroke-dasharray={strokeDasharray(entity)}
-        style={extrusionStyle(entity)}
-      />,
-    POLYLINE: (entity, vertices) => {
-      const flags = +($(entity, 70) ?? 0)
-      let d = ''
-      for (const vertex of vertices) {
-        d += `${d ? 'L' : 'M'}${$trim(vertex, 10)} ${$negate(vertex, 20)}`
-      }
-      if (flags & 1) {
-        d += 'Z'
-      }
-      return (
-        <path
+    POINT: () => undefined,
+    LINE: entity => {
+      const xs = $numbers(entity, 10, 11)
+      const ys = $negates(entity, 20, 21)
+      return [
+        <line
           {...commonAttributes(entity)}
-          d={d}
+          x1={xs[0]}
+          y1={ys[0]}
+          x2={xs[1]}
+          y2={ys[1]}
           stroke={color(entity)}
           stroke-dasharray={strokeDasharray(entity)}
           style={extrusionStyle(entity)}
-        />
-      )
+        />,
+        xs,
+        ys,
+      ]
+    },
+    POLYLINE: (entity, vertices) => {
+      const xs = vertices.map(v => $number(v, 10))
+      const ys = vertices.map(v => -$number(v, 20))
+      const flags = +($(entity, 70) ?? 0)
+      return [
+        <path
+          {...commonAttributes(entity)}
+          d={polylinePath(xs, ys, flags & 1)}
+          stroke={color(entity)}
+          stroke-dasharray={strokeDasharray(entity)}
+          style={extrusionStyle(entity)}
+        />,
+        xs,
+        ys,
+      ]
     },
     LWPOLYLINE: entity => {
+      const xs = $$(entity, 10).map(s => +s)
+      const ys = $$(entity, 20).map(s => -s)
       const flags = +($(entity, 70) ?? 0)
-      const xs = $$(entity, 10)
-      const ys = $$(entity, 20)
-      let d = ''
-      for (let i = 0; i < xs.length; i++) {
-        d += `${d ? 'L' : 'M'}${trim(xs[i])} ${negate(trim(ys[i]))}`
-      }
-      if (flags & 1) {
-        d += 'Z'
-      }
-      return (
+      return [
         <path
           {...commonAttributes(entity)}
-          d={d}
+          d={polylinePath(xs, ys, flags & 1)}
           stroke={color(entity)}
           stroke-dasharray={strokeDasharray(entity)}
           style={extrusionStyle(entity)}
-        />
-      )
+        />,
+        xs,
+        ys,
+      ]
     },
-    CIRCLE: entity =>
-      <circle
-        {...commonAttributes(entity)}
-        cx={$trim(entity, 10)}
-        cy={$negate(entity, 20)}
-        r={$trim(entity, 40)}
-        stroke={color(entity)}
-        stroke-dasharray={strokeDasharray(entity)}
-        style={extrusionStyle(entity)}
-    />,
+    CIRCLE: entity => {
+      const [cx, cy, r] = $numbers(entity, 10, 20, 40)
+      return [
+        <circle
+          {...commonAttributes(entity)}
+          cx={cx}
+          cy={-cy}
+          r={r}
+          stroke={color(entity)}
+          stroke-dasharray={strokeDasharray(entity)}
+          style={extrusionStyle(entity)}
+        />,
+        [cx - r, cx + r],
+        [-cy - r, -cy + r],
+      ]
+    },
     ARC: entity => {
-      const cx = $number(entity, 10)
-      const cy = $number(entity, 20)
-      const r = $number(entity, 40)
+      const [cx, cy, r] = $numbers(entity, 10, 20, 40)
       const deg1 = $number(entity, 50, 0)
       const deg2 = $number(entity, 51, 0)
       const rad1 = deg1 * Math.PI / 180
@@ -149,29 +167,28 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const x2 = cx + r * Math.cos(rad2)
       const y2 = cy + r * Math.sin(rad2)
       const large = (deg2 - deg1 + 360) % 360 <= 180 ? '0' : '1'
-      return (
+      return [
         <path
           {...commonAttributes(entity)}
           d={`M${x1} ${-y1}A${r} ${r} 0 ${large} 0 ${x2} ${-y2}`}
           stroke={color(entity)}
           stroke-dasharray={strokeDasharray(entity)}
           style={extrusionStyle(entity)}
-        />
-      )
+        />,
+        [x1, x2],
+        [-y1, -y2],
+      ]
     },
     ELLIPSE: entity => {
       // https://wiki.gz-labs.net/index.php/ELLIPSE
-      const cx = $number(entity, 10)
-      const cy = $number(entity, 20)!
-      const majorX = $number(entity, 11)
-      const majorY = $number(entity, 21)
-      const majorR = Math.sqrt(majorX * majorX + majorY * majorY)
+      const [cx, cy, majorX, majorY] = $numbers(entity, 10, 20, 11, 21)
+      const majorR = norm(majorX, majorY)
       const minorR = $number(entity, 40)! * majorR
       const radAngleOffset = -Math.atan2(majorY, majorX)
       const rad1 = $number(entity, 41, 0)
       const rad2 = $number(entity, 42, 2 * Math.PI)
       if (nearlyEqual(rad1, 0) && nearlyEqual(rad2, 2 * Math.PI)) {
-        return (
+        return [
           <ellipse
             {...commonAttributes(entity)}
             cx={cx}
@@ -182,38 +199,37 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
             stroke-dasharray={strokeDasharray(entity)}
             transform={radAngleOffset && `rotate(${radAngleOffset * 180 / Math.PI} ${cx} ${-cy})`}
             style={extrusionStyle(entity)}
-          />
-        )
+          />,
+          [cx - majorR, cx + majorR],
+          [-cy - minorR, -cy + minorR],
+        ]
       } else {
         warn('Elliptical arc cannot be rendered yet.')
-        return ''
       }
     },
     LEADER: entity => {
-      const xs = $$(entity, 10)
-      const ys = $$(entity, 20)
-      let d = ''
-      for (let i = 0; i < xs.length; i++) {
-        d += `${d ? 'L' : 'M'}${trim(xs[i])} ${negate(trim(ys[i]))}`
-      }
-      return (
+      const xs = $$(entity, 10).map(s => +s)
+      const ys = $$(entity, 20).map(s => -s)
+      return [
         <path
           {...commonAttributes(entity)}
-          d={d}
+          d={polylinePath(xs, ys)}
           stroke={color(entity)}
           stroke-dasharray={strokeDasharray(entity)}
-        />
-      )
+        />,
+        xs,
+        ys,
+      ]
     },
     HATCH: entity => {
       const paths = entity.slice(
         entity.findIndex(groupCode => groupCode[0] === 92),
         entity.findIndex(groupCode => groupCode[0] === 97),
       )
-      const x1s = $$(paths, 10).map(trim)
-      const y1s = $$(paths, 20).map(trim).map(negate)
-      const x2s = $$(paths, 11).map(trim)
-      const y2s = $$(paths, 21).map(trim).map(negate)
+      const x1s = $$(paths, 10).map(s => +s)
+      const y1s = $$(paths, 20).map(s => -s)
+      const x2s = $$(paths, 11).map(s => +s)
+      const y2s = $$(paths, 21).map(s => -s)
       let d = ''
       for (let i = 0; i < x1s.length; i++) {
         if (!x2s[i]) {
@@ -224,32 +240,33 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           d += `M${x1s[i]} ${y1s[i]}L${x2s[i]} ${y2s[i]}`
         }
       }
-      return <path {...commonAttributes(entity)} d={d} fill={color(entity) || 'currentColor'} fill-opacity='.3' />
+      return [
+        <path {...commonAttributes(entity)} d={d} fill={color(entity)} fill-opacity='.3' />,
+        [...x1s, ...x2s],
+        [...y1s, ...y2s],
+      ]
     },
     SOLID: entity => {
-      const x1 = $trim(entity, 10)
-      const y1 = $negate(entity, 20)
-      const x2 = $trim(entity, 11)
-      const y2 = $negate(entity, 21)
-      const x3 = $trim(entity, 12)
-      const y3 = $negate(entity, 22)
-      const x4 = $trim(entity, 13)
-      const y4 = $negate(entity, 23)
+      const [x1, x2, x3, x4] = $numbers(entity, 10, 11, 12, 13)
+      const [y1, y2, y3, y4] = $negates(entity, 20, 21, 22, 23)
       const d = `M${x1} ${y1}L${x2} ${y2}L${x3} ${y3}${x3 !== x4 || y3 !== y4 ? `L${x4} ${y4}` : ''}Z`
-      return <path {...commonAttributes(entity)} d={d} fill={color(entity)} />
+      return [
+        <path {...commonAttributes(entity)} d={d} fill={color(entity)} />,
+        [x1, x2, x3, x4],
+        [y1, y2, y3, y4],
+      ]
     },
     TEXT: entity => {
-      const x = $trim(entity, 10)
-      const y = $negate(entity, 20)
-      const angle = $negate(entity, 50)
+      const [x, h] = $numbers(entity, 10, 40)
+      const [y, angle] = $negates(entity, 20, 50)
       const contents = parseDxfTextContent($(entity, 1) || '', options)
-      return (
+      return [
         <text
           {...commonAttributes(entity)}
           x={x}
           y={y}
           fill={color(entity)}
-          font-size={$trim(entity, 40)}
+          font-size={h}
           dominant-baseline={TEXT_dominantBaseline[$trim(entity, 73) as string & number]}
           text-anchor={TEXT_textAnchor[$trim(entity, 72) as string & number]}
           transform={angle && `rotate(${angle} ${x} ${y})`}
@@ -260,28 +277,33 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
               ? contents[0].text
               : contents.map(content => <tspan text-decoration={textDecorations(content)}>{content.text}</tspan>)
           }
-        </text>
-      )
+        </text>,
+        [x, x + h * contents.length],
+        [y, y + h],
+      ]
     },
     MTEXT: entity => {
-      const x = $trim(entity, 10)
-      const y = $negate(entity, 20)
+      const [x, h] = $numbers(entity, 10, 40)
+      const y = -$number(entity, 20)
       const angle = MTEXT_angle(entity)
       const { dominantBaseline, textAnchor } = MTEXT_attachmentPoint($trim(entity, 71))
-      return (
+      const contents = $$(entity, 3).join('') + ($(entity, 1) ?? '')
+      return [
         <text
           {...commonAttributes(entity)}
           x={x}
           y={y}
           fill={color(entity)}
-          font-size={$trim(entity, 40)}
+          font-size={h}
           dominant-baseline={dominantBaseline}
           text-anchor={textAnchor}
           transform={angle ? `rotate(${-angle} ${x} ${y})` : undefined}
         >
-          {MTEXT_contents(parseDxfMTextContent($$(entity, 3).join('') + ($(entity, 1) ?? ''), options))}
-        </text>
-      )
+          {MTEXT_contents(parseDxfMTextContent(contents, options))}
+        </text>,
+        [x, x + h * contents.length],
+        [y, y + h],
+      ]
     },
     DIMENSION: entity => {
       const styleName = $(entity, 3)
@@ -292,31 +314,33 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       let value = $number(entity, 42, NaN)
       let dominantBaseline = 'text-after-edge'
       let textAnchor = 'middle'
-      let angle
+      let angle: number | undefined
       value === -1 && (value = NaN)
       const factor = $style(144, 1)
-      const tx = $trim(entity, 11)
-      const ty = $negate(entity, 21)
+      const tx = $number(entity, 11)
+      const ty = -$number(entity, 21)
+      const xs = [tx]
+      const ys = [ty]
       const dimensionType = $number(entity, 70, 0)
       switch (dimensionType & 7) {
         case 0: // Rotated, Horizontal, or Vertical
         case 1: // Aligned
         {
-          const x1 = $trim(entity, 13)
-          const y1 = $negate(entity, 23)
-          const x2 = $trim(entity, 14)
-          const y2 = $negate(entity, 24)
-          angle = Math.round(-$number(entity, 50) || 0)
+          const [x1, x2] = $numbers(entity, 13, 14)
+          const [y1, y2] = $negates(entity, 23, 24)
+          angle = Math.round(-$number(entity, 50, 0) || 0)
           if (angle % 180 === 0) {
             const y0 = $negate(entity, 20)
-            value = value || Math.abs(+x1! - +x2!) * factor
+            value = value || Math.abs(x1 - x2) * factor
             lineElements = <path d={`M${x1} ${y1}L${x1} ${y0}L${x2} ${y0}L${x2} ${y2}`} />
             angle = 0
           } else {
             const x0 = $trim(entity, 10)
-            value = value || Math.abs(+y1! - +y2!) * factor
+            value = value || Math.abs(y1 - y2) * factor
             lineElements = <path d={`M${x1} ${y1}L${x0} ${y1}L${x0} ${y2}L${x2} ${y2}`} />
           }
+          xs.push(x1, x2)
+          ys.push(y1, y2)
           break
         }
         case 2: // Angular
@@ -329,10 +353,8 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           break
         case 6: // Ordinate
         {
-          const x1 = $trim(entity, 13)
-          const y1 = $negate(entity, 23)
-          const x2 = $trim(entity, 14)
-          const y2 = $negate(entity, 24)
+          const [x1, x2] = $numbers(entity, 13, 14)
+          const [y1, y2] = $negates(entity, 23, 24)
           if (dimensionType & 64) {
             const x0 = $number(entity, 10)
             value = value || Math.abs(x0 - +x1!) * factor
@@ -345,6 +367,8 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           }
           dominantBaseline = 'central'
           textAnchor = 'middle'
+          xs.push(x1, x2)
+          ys.push(y1, y2)
           break
         }
       }
@@ -382,16 +406,18 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
             {MTEXT_contents(parseDxfMTextContent(text))}
           </text>
       }
-      return (
+      return [
         <g
           {...commonAttributes(entity)}
-          stroke={color(entity) || 'currentColor'}
+          stroke={color(entity)}
           stroke-dasharray={strokeDasharray(entity)}
           style={extrusionStyle(entity)}
         >
           {lineElements + textElement}
-        </g>
-      )
+        </g>,
+        xs,
+        ys,
+      ]
     },
     ACAD_TABLE: entity => {
       const cells: DxfRecordReadonly[] = []
@@ -407,7 +433,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       }
       const ys = $$(entity, 141).map(s => +s).reduce((ys, size) => (ys.push(ys[ys.length - 1] + size), ys), [0])
       const xs = $$(entity, 142).map(s => +s).reduce((xs, size) => (xs.push(xs[xs.length - 1] + size), xs), [0])
-      const lineColor = color(entity) || 'currentColor'
+      const lineColor = color(entity)
       const textColor = resolveColorIndex(+$(entity, 64)!)
       let s = ys.map(y => <line stroke={lineColor} x1='0' y1={y} x2={xs[xs.length - 1]} y2={y} />).join('')
       let xi = 0
@@ -423,11 +449,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           warn('Table cell type "block" cannot be rendered yet.', entity, cell)
         } else {
           s +=
-            <text
-              x={x}
-              y={y}
-              fill={!isNaN(color) ? resolveColorIndex(color) : textColor}
-            >
+            <text x={x} y={y} fill={!isNaN(color) ? resolveColorIndex(color) : textColor}>
               {MTEXT_contents(parseDxfMTextContent($(cell, 1) ?? ''))}
             </text>
         }
@@ -444,26 +466,30 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           y2={ys[ys.length - 1]}
           stroke={lineColor}
         />
-      return (
+      const x = $number(entity, 10)
+      const y = -$number(entity, 20)
+      return [
         <g
           {...commonAttributes(entity)}
           font-size={$trim(entity, 140)}
           dominant-baseline='text-before-edge'
-          transform={`translate(${$trim(entity, 10)},${$negate(entity, 20)})`}
+          transform={`translate(${x},${y})`}
         >
           {s}
-        </g>
-      )
+        </g>,
+        xs.map(_x => _x + x),
+        ys.map(_y => _y + y),
+      ]
     },
     INSERT: entity => {
-      const x = $trim(entity, 10)
-      const y = $negate(entity, 20)
+      const x = $number(entity, 10, 0)
+      const y = -$number(entity, 20, 0)
       const rotate = $negate(entity, 50)
-      const xscale = $trim(entity, 41) || 1
-      const yscale = $trim(entity, 42) || 1
+      const xscale = $number(entity, 41, 1) || 1
+      const yscale = $number(entity, 42, 1) || 1
       const transform = [
-        +x! || +y! ? `translate(${x},${y})` : '',
-        +xscale !== 1 || +yscale !== 1 ? `scale(${xscale},${yscale})` : '',
+        x || y ? `translate(${x},${y})` : '',
+        xscale !== 1 || yscale !== 1 ? `scale(${xscale},${yscale})` : '',
         rotate ? `rotate(${rotate})` : ''
       ].filter(Boolean).join(' ')
       const _block = dxf.BLOCKS?.[$(entity, 2)!]
@@ -471,16 +497,24 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
         $(_block[0], 0) === 'BLOCK' ? 1 : 0,
         $(_block[_block.length - 1], 0) === 'ENDBLK' ? -1 : undefined,
       )
-      const contents = entitiesToSvgString(dxf, block, options)
-      return <g {...commonAttributes(entity)} color={_color(entity)} transform={transform}>{contents}</g>
+      const [contents, bbox] = entitiesSvg(dxf, block, options)
+      return [
+        <g {...commonAttributes(entity)} color={_color(entity)} transform={transform}>{contents}</g>,
+        [x + bbox.x, x + bbox.x + bbox.w * xscale],
+        [y + bbox.y, y + bbox.y + bbox.h * yscale],
+      ]
     },
   }
 }
 
-const entitiesToSvgString = (dxf: DxfReadonly, entities: DxfReadonly['ENTITIES'], options: CreateSvgContentStringOptions) => {
+const entitiesSvg = (dxf: DxfReadonly, entities: DxfReadonly['ENTITIES'], options: CreateSvgContentStringOptions) => {
   const { warn } = options
   const entitySvgMap = createEntitySvgMap(dxf, options)
   let s = ''
+  let minX = Infinity
+  let maxX = -Infinity
+  let minY = Infinity
+  let maxY = -Infinity
   if (entities) {
     for (let i = 0; i < entities.length; i++) {
       const entity = entities[i]
@@ -495,18 +529,31 @@ const entitiesToSvgString = (dxf: DxfReadonly, entities: DxfReadonly['ENTITIES']
       if (vertices.length !== 0 && $(entities[i + 1], 0) === 'SEQEND') {
         i++
       }
-      const entitySvg = entitySvgMap[entityType]
-      if (entitySvg) {
-        s += entitySvg(entity, vertices)
-      } else {
-        warn(`Unknown entity type: ${entityType}`, entity)
+      try {
+        const entitySvg = entitySvgMap[entityType]
+        if (entitySvg) {
+          const svg = entitySvg(entity, vertices)
+          if (svg) {
+            s += svg[0]
+            const xs = svg[1].filter(x => isFinite(x))
+            const ys = svg[2].filter(y => isFinite(y))
+            minX = Math.min(minX, ...xs)
+            maxX = Math.max(maxX, ...xs)
+            minY = Math.min(minY, ...ys)
+            maxY = Math.max(maxY, ...ys)
+          }
+        } else {
+          warn(`Unknown entity type: ${entityType}`, entity)
+        }
+      } catch (error) {
+        warn(`Error occurred: ${error}`, entity)
       }
     }
   }
-  return s
+  return [s, { x: minX, y: minY, w: maxX - minX, h: maxY - minY }] as const
 }
 
-export const createSvgContentsString = (dxf: DxfReadonly, options?: Partial<CreateSvgContentStringOptions>) => {
+export const createSvgContents = (dxf: DxfReadonly, options?: Partial<CreateSvgContentStringOptions>) => {
   const resolvedOptions = options ? { ...defaultOptions, ...options } : defaultOptions
-  return entitiesToSvgString(dxf, dxf.ENTITIES, resolvedOptions)
+  return entitiesSvg(dxf, dxf.ENTITIES, resolvedOptions)
 }
