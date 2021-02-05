@@ -16,6 +16,9 @@
     "build:mjs": "rollup -c",
     "build:dts": "dts-bundle-generator --no-banner --inline-declare-externals -o index.d.ts src/index.ts",
     "typecheck": "tsc -p .",
+    "start": "npm-run-all -p watch:*",
+    "watch:mjs": "rollup -c -w",
+    "watch:viewer": "esbuild --bundle --minify --serve viewer/app.ts",
     "test": "node --harmony --es-module-specifier-resolution=node bin/dxf2svg.mjs sample/1.dxf"
   },
   "devDependencies": {
@@ -26,6 +29,7 @@
     "@babel/preset-typescript": "^7.12.7",
     "@rollup/plugin-node-resolve": "^11.1.1",
     "dts-bundle-generator": "^5.6.0",
+    "esbuild": "^0.8.42",
     "npm-run-all": "^4.1.5",
     "rollup": "^2.38.3",
     "rollup-plugin-babel": "^4.4.0",
