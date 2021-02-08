@@ -537,6 +537,7 @@ const createEntitySvgMap = (dxf, options) => {
               const y0 = $negate(entity, 20);
               value = value || Math.abs(x1 - x2) * factor;
               lineElements = jsx("path", {
+                stroke: "currentColor",
                 d: `M${x1} ${y1}L${x1} ${y0}L${x2} ${y0}L${x2} ${y2}`
               });
               angle = 0;
@@ -544,6 +545,7 @@ const createEntitySvgMap = (dxf, options) => {
               const x0 = $trim(entity, 10);
               value = value || Math.abs(y1 - y2) * factor;
               lineElements = jsx("path", {
+                stroke: "currentColor",
                 d: `M${x1} ${y1}L${x0} ${y1}L${x0} ${y2}L${x2} ${y2}`
               });
             }
@@ -577,6 +579,7 @@ const createEntitySvgMap = (dxf, options) => {
               const x0 = $number(entity, 10);
               value = value || Math.abs(x0 - +x1) * factor;
               lineElements = jsx("path", {
+                stroke: "currentColor",
                 d: `M${x1} ${y1}L${x1} ${y2}L${x2} ${y2}L${tx} ${ty}`
               });
               angle = -90;
@@ -584,6 +587,7 @@ const createEntitySvgMap = (dxf, options) => {
               const y0 = -$number(entity, 20);
               value = value || Math.abs(y0 - +y1) * factor;
               lineElements = jsx("path", {
+                stroke: "currentColor",
                 d: `M${x1} ${y1}L${x2} ${y1}L${x2} ${y2}L${tx} ${ty}`
               });
             }

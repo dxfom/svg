@@ -332,12 +332,12 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           if (angle % 180 === 0) {
             const y0 = $negate(entity, 20)
             value = value || Math.abs(x1 - x2) * factor
-            lineElements = <path d={`M${x1} ${y1}L${x1} ${y0}L${x2} ${y0}L${x2} ${y2}`} />
+            lineElements = <path stroke="currentColor" d={`M${x1} ${y1}L${x1} ${y0}L${x2} ${y0}L${x2} ${y2}`} />
             angle = 0
           } else {
             const x0 = $trim(entity, 10)
             value = value || Math.abs(y1 - y2) * factor
-            lineElements = <path d={`M${x1} ${y1}L${x0} ${y1}L${x0} ${y2}L${x2} ${y2}`} />
+            lineElements = <path stroke="currentColor" d={`M${x1} ${y1}L${x0} ${y1}L${x0} ${y2}L${x2} ${y2}`} />
           }
           xs.push(x1, x2)
           ys.push(y1, y2)
@@ -358,12 +358,12 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           if (dimensionType & 64) {
             const x0 = $number(entity, 10)
             value = value || Math.abs(x0 - +x1!) * factor
-            lineElements = <path d={`M${x1} ${y1}L${x1} ${y2}L${x2} ${y2}L${tx} ${ty}`} />
+            lineElements = <path stroke="currentColor" d={`M${x1} ${y1}L${x1} ${y2}L${x2} ${y2}L${tx} ${ty}`} />
             angle = -90
           } else {
             const y0 = -$number(entity, 20)
             value = value || Math.abs(y0 - +y1!) * factor
-            lineElements = <path d={`M${x1} ${y1}L${x2} ${y1}L${x2} ${y2}L${tx} ${ty}`} />
+            lineElements = <path stroke="currentColor" d={`M${x1} ${y1}L${x2} ${y1}L${x2} ${y2}L${tx} ${ty}`} />
           }
           dominantBaseline = 'central'
           textAnchor = 'middle'
