@@ -409,7 +409,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       return [
         <g
           {...commonAttributes(entity)}
-          stroke={color(entity)}
+          color={color(entity)}
           stroke-dasharray={strokeDasharray(entity)}
           style={extrusionStyle(entity)}
         >

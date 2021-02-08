@@ -623,7 +623,7 @@ const createEntitySvgMap = (dxf, options) => {
         });
       }
       return [jsx("g", { ...commonAttributes(entity),
-        stroke: color(entity),
+        color: color(entity),
         "stroke-dasharray": strokeDasharray(entity),
         style: extrusionStyle(entity),
         children: lineElements + textElement
