@@ -154,12 +154,12 @@ const MTEXT_angle = mtext => {
 
   return 0;
 };
-const MTEXT_contents = (contents, i = 0) => {
+const MTEXT_contents = (contents, options, i = 0) => {
   if (contents.length <= i) {
     return '';
   }
 
-  const restContents = MTEXT_contents(contents, i + 1);
+  const restContents = MTEXT_contents(contents, options, i + 1);
   const content = contents[i];
 
   if (typeof content === 'string') {
@@ -167,7 +167,7 @@ const MTEXT_contents = (contents, i = 0) => {
   }
 
   if (Array.isArray(content)) {
-    return MTEXT_contents(content) + restContents;
+    return MTEXT_contents(content, options) + restContents;
   }
 
   if (content.S) {
@@ -184,10 +184,19 @@ const MTEXT_contents = (contents, i = 0) => {
   }
 
   if (content.f) {
+    var _options$resolveFont, _options$resolveFont2;
+
+    const _font = {
+      family: content.f,
+      weight: content.b ? 700 : 400,
+      style: content.i ? 'italic' : undefined
+    };
+    const font = (_options$resolveFont = options === null || options === void 0 ? void 0 : (_options$resolveFont2 = options.resolveFont) === null || _options$resolveFont2 === void 0 ? void 0 : _options$resolveFont2.call(options, _font)) !== null && _options$resolveFont !== void 0 ? _options$resolveFont : _font;
     return jsx("tspan", {
-      "font-family": content.f,
-      "font-weight": content.b && 'bold',
-      "font-style": content.i && 'italic',
+      "font-family": font.family,
+      "font-weight": font.weight,
+      "font-style": font.style,
+      "font-size": font.scale && font.scale !== 1 ? font.scale + 'em' : undefined,
       children: restContents
     });
   }
@@ -485,7 +494,7 @@ const createEntitySvgMap = (dxf, options) => {
         "dominant-baseline": dominantBaseline,
         "text-anchor": textAnchor,
         transform: angle ? `rotate(${-angle} ${x} ${y})` : undefined,
-        children: MTEXT_contents(parseDxfMTextContent(contents, options))
+        children: MTEXT_contents(parseDxfMTextContent(contents, options), options)
       }), [x, x + h * contents.length], [y, y + h]];
     },
     DIMENSION: entity => {
@@ -619,7 +628,7 @@ const createEntitySvgMap = (dxf, options) => {
           "dominant-baseline": dominantBaseline,
           "text-anchor": textAnchor,
           transform: angle && `rotate(${angle} ${tx} ${ty})`,
-          children: MTEXT_contents(parseDxfMTextContent(text))
+          children: MTEXT_contents(parseDxfMTextContent(text), options)
         });
       }
       return [jsx("g", { ...commonAttributes(entity),
@@ -681,7 +690,7 @@ const createEntitySvgMap = (dxf, options) => {
             x: x,
             y: y,
             fill: !isNaN(color) ? resolveColorIndex(color) : textColor,
-            children: MTEXT_contents(parseDxfMTextContent((_$5 = getGroupCodeValue(cell, 1)) !== null && _$5 !== void 0 ? _$5 : ''))
+            children: MTEXT_contents(parseDxfMTextContent((_$5 = getGroupCodeValue(cell, 1)) !== null && _$5 !== void 0 ? _$5 : ''), options)
           });
         }
 

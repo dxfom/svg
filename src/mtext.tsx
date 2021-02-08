@@ -50,17 +50,28 @@ export const MTEXT_angle = (mtext: DxfRecordReadonly): number => {
   return 0
 }
 
-export const MTEXT_contents = (contents: readonly DxfMTextContentElement[], i = 0): string => {
+export interface DxfFont {
+  readonly family: string
+  readonly weight?: number
+  readonly style?: 'italic'
+  readonly scale?: number
+}
+
+export interface MTEXT_contentsOptions {
+  readonly resolveFont?: (font: DxfFont) => Partial<DxfFont>
+}
+
+export const MTEXT_contents = (contents: readonly DxfMTextContentElement[], options?: MTEXT_contentsOptions, i = 0): string => {
   if (contents.length <= i) {
     return ''
   }
-  const restContents = MTEXT_contents(contents, i + 1)
+  const restContents = MTEXT_contents(contents, options, i + 1)
   const content = contents[i]
   if (typeof content === 'string') {
     return content + restContents
   }
   if (Array.isArray(content)) {
-    return MTEXT_contents(content) + restContents
+    return MTEXT_contents(content, options) + restContents
   }
   if (content.S) {
     return (
@@ -71,11 +82,14 @@ export const MTEXT_contents = (contents: readonly DxfMTextContentElement[], i = 
     ) + restContents
   }
   if (content.f) {
+    const _font: DxfFont = { family: content.f, weight: content.b ? 700 : 400, style: content.i ? 'italic' : undefined }
+    const font = options?.resolveFont?.(_font) ?? _font
     return (
       <tspan
-        font-family={content.f}
-        font-weight={content.b && 'bold'}
-        font-style={content.i && 'italic'}
+        font-family={font.family}
+        font-weight={font.weight}
+        font-style={font.style}
+        font-size={font.scale && font.scale !== 1 ? font.scale + 'em' : undefined}
       >
         {restContents}
       </tspan>

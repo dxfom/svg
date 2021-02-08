@@ -1,6 +1,15 @@
 import { DxfReadonly } from '@dxfom/dxf';
 
-export interface CreateSvgContentStringOptions {
+export interface DxfFont {
+	readonly family: string;
+	readonly weight?: number;
+	readonly style?: "italic";
+	readonly scale?: number;
+}
+export interface MTEXT_contentsOptions {
+	readonly resolveFont?: (font: DxfFont) => Partial<DxfFont>;
+}
+export interface CreateSvgContentStringOptions extends MTEXT_contentsOptions {
 	readonly warn: (message: string, ...args: any[]) => void;
 	readonly resolveColorIndex: (colorIndex: number) => string;
 	readonly encoding?: string | TextDecoder;

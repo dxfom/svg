@@ -3,10 +3,10 @@ import { DxfReadonly, DxfRecordReadonly, getGroupCodeValue as $, getGroupCodeVal
 import { parseDxfMTextContent } from '@dxfom/mtext'
 import { decodeDxfTextCharacterCodes, DxfTextContentElement, parseDxfTextContent } from '@dxfom/text'
 import { collectDimensionStyleOverrides } from './dstyle'
-import { MTEXT_angle, MTEXT_attachmentPoint, MTEXT_contents } from './mtext'
+import { MTEXT_angle, MTEXT_attachmentPoint, MTEXT_contents, MTEXT_contentsOptions } from './mtext'
 import { $negate, $negates, $number, $numbers, $trim, nearlyEqual, norm, round, trim } from './util'
 
-export interface CreateSvgContentStringOptions {
+export interface CreateSvgContentStringOptions extends MTEXT_contentsOptions {
   readonly warn: (message: string, ...args: any[]) => void
   readonly resolveColorIndex: (colorIndex: number) => string
   readonly encoding?: string | TextDecoder
@@ -299,7 +299,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           text-anchor={textAnchor}
           transform={angle ? `rotate(${-angle} ${x} ${y})` : undefined}
         >
-          {MTEXT_contents(parseDxfMTextContent(contents, options))}
+          {MTEXT_contents(parseDxfMTextContent(contents, options), options)}
         </text>,
         [x, x + h * contents.length],
         [y, y + h],
@@ -403,7 +403,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
             text-anchor={textAnchor}
             transform={angle && `rotate(${angle} ${tx} ${ty})`}
           >
-            {MTEXT_contents(parseDxfMTextContent(text))}
+            {MTEXT_contents(parseDxfMTextContent(text), options)}
           </text>
       }
       return [
@@ -450,7 +450,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
         } else {
           s +=
             <text x={x} y={y} fill={!isNaN(color) ? resolveColorIndex(color) : textColor}>
-              {MTEXT_contents(parseDxfMTextContent($(cell, 1) ?? ''))}
+              {MTEXT_contents(parseDxfMTextContent($(cell, 1) ?? ''), options)}
             </text>
         }
         if (++xi === xs.length - 1) {
