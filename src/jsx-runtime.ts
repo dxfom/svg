@@ -20,7 +20,7 @@ export const jsx = (type: string, props: Record<string, unknown>) => {
     s += ' vector-effect="non-scaling-stroke"'
   }
   if (type === 'text') {
-    s += ' stroke="none" white-space="pre"'
+    s += ' stroke="none" style="white-space:pre"'
   }
   if (children) {
     s += `>${Array.isArray(children) ? children.join('') : children}</${type}>`

@@ -30,7 +30,7 @@ const jsx = (type, props) => {
   }
 
   if (type === 'text') {
-    s += ' stroke="none" white-space="pre"';
+    s += ' stroke="none" style="white-space:pre"';
   }
 
   if (children) {
