@@ -21,6 +21,8 @@ const commonAttributes = (entity: DxfRecordReadonly) => ({
   'data-5': $trim(entity, 5)
 })
 
+const toleranceString = (n: number) => n > 0 ? '+' + n : n < 0 ? String(n) : ' 0'
+
 const textDecorations = ({ k, o, u }: DxfTextContentElement) => {
   const decorations = []
   k && decorations.push('line-through')
@@ -352,8 +354,16 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           break
         case 3: // Diameter
         case 4: // Radius
-          warn('Diameter / radius dimension cannot be rendered yet.', entity)
+        {
+          const [x0, x1] = $numbers(entity, 10, 15)
+          const [y0, y1] = $negates(entity, 20, 25)
+          value = value || norm(x0 - x1, y0 - y1) * factor
+          lineElements = <path stroke="currentColor" d={`M${x0} ${y0}L${x1} ${y1}`} />
+          angle = (Math.atan2(y0 - y1, x0 - x1) * 180 / Math.PI + 90) % 180 - 90
+          xs.push(x0, x1)
+          ys.push(y0, y1)
           break
+        }
         case 6: // Ordinate
         {
           const [x1, x2] = $numbers(entity, 13, 14)
@@ -387,7 +397,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
             if (p === n) {
               valueWithTolerance = `${value}  ±${p}`
             } else {
-              valueWithTolerance = `${value}  {\\S${p ? '+' + p : ' 0'}^${-n || ' 0'};}`
+              valueWithTolerance = `${value}  {\\S${toleranceString(p)}^${toleranceString(-n)};}`
             }
           }
         }

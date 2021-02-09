@@ -222,6 +222,8 @@ const commonAttributes = entity => ({
   'data-5': $trim(entity, 5)
 });
 
+const toleranceString = n => n > 0 ? '+' + n : n < 0 ? String(n) : ' 0';
+
 const textDecorations = ({
   k,
   o,
@@ -562,8 +564,19 @@ const createEntitySvgMap = (dxf, options) => {
 
         case 4:
           // Radius
-          warn('Diameter / radius dimension cannot be rendered yet.', entity);
-          break;
+          {
+            const [x0, x1] = $numbers(entity, 10, 15);
+            const [y0, y1] = $negates(entity, 20, 25);
+            value = value || norm(x0 - x1, y0 - y1) * factor;
+            lineElements = jsx("path", {
+              stroke: "currentColor",
+              d: `M${x0} ${y0}L${x1} ${y1}`
+            });
+            angle = (Math.atan2(y0 - y1, x0 - x1) * 180 / Math.PI + 90) % 180 - 90;
+            xs.push(x0, x1);
+            ys.push(y0, y1);
+            break;
+          }
 
         case 6:
           // Ordinate
@@ -612,7 +625,7 @@ const createEntitySvgMap = (dxf, options) => {
             if (p === n) {
               valueWithTolerance = `${value}  ±${p}`;
             } else {
-              valueWithTolerance = `${value}  {\\S${p ? '+' + p : ' 0'}^${-n || ' 0'};}`;
+              valueWithTolerance = `${value}  {\\S${toleranceString(p)}^${toleranceString(-n)};}`;
             }
           }
         }
