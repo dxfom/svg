@@ -74,9 +74,7 @@ const round = (() => {
   return (n, precision) => _shift(Math.round(_shift(n, precision)), -precision);
 })();
 const trim = s => s ? s.trim() : s;
-const negate = s => !s ? s : s.startsWith('-') ? s.slice(1) : '-' + s;
 const $trim = (record, groupCode) => trim(getGroupCodeValue(record, groupCode));
-const $negate = (record, groupCode) => negate(trim(getGroupCodeValue(record, groupCode)));
 const $number = (record, groupCode, defaultValue) => {
   const value = +getGroupCodeValue(record, groupCode);
 
@@ -279,10 +277,10 @@ const createEntitySvgMap = (dxf, options) => {
     if (getGroupCodeValue(ltype, 0) === 'LTYPE') {
       const _strokeDasharray = getGroupCodeValues(ltype, 49).map(trim).map(s => s.startsWith('-') ? s.slice(1) : s);
 
-      const strokeDasharray = _strokeDasharray.length % 2 === 1 ? _strokeDasharray : _strokeDasharray[0] === '0' ? _strokeDasharray.slice(1) : _strokeDasharray.concat('0');
-      ltypeMap[getGroupCodeValue(ltype, 2)] = {
+      const strokeDasharray = _strokeDasharray.length === 0 || _strokeDasharray.length % 2 === 1 ? _strokeDasharray : _strokeDasharray[0] === '0' ? _strokeDasharray.slice(1) : _strokeDasharray.concat('0');
+      strokeDasharray.length !== 0 && (ltypeMap[getGroupCodeValue(ltype, 2)] = {
         strokeDasharray: strokeDasharray.join(' ')
-      };
+      });
     }
   }
 
@@ -529,12 +527,11 @@ const createEntitySvgMap = (dxf, options) => {
         case 1:
           // Aligned
           {
-            const [x1, x2] = $numbers(entity, 13, 14);
-            const [y1, y2] = $negates(entity, 23, 24);
+            const [x0, x1, x2] = $numbers(entity, 10, 13, 14);
+            const [y0, y1, y2] = $negates(entity, 20, 23, 24);
             angle = Math.round(-$number(entity, 50, 0) || 0);
 
             if (angle % 180 === 0) {
-              const y0 = $negate(entity, 20);
               value = value || Math.abs(x1 - x2) * factor;
               lineElements = jsx("path", {
                 stroke: "currentColor",
@@ -542,7 +539,6 @@ const createEntitySvgMap = (dxf, options) => {
               });
               angle = 0;
             } else {
-              const x0 = $trim(entity, 10);
               value = value || Math.abs(y1 - y2) * factor;
               lineElements = jsx("path", {
                 stroke: "currentColor",
@@ -725,7 +721,7 @@ const createEntitySvgMap = (dxf, options) => {
 
       const x = $number(entity, 10, 0);
       const y = -$number(entity, 20, 0);
-      const rotate = $negate(entity, 50);
+      const rotate = -$number(entity, 50);
       const xscale = $number(entity, 41, 1) || 1;
       const yscale = $number(entity, 42, 1) || 1;
       const transform = [x || y ? `translate(${x},${y})` : '', xscale !== 1 || yscale !== 1 ? `scale(${xscale},${yscale})` : '', rotate ? `rotate(${rotate})` : ''].filter(Boolean).join(' ');

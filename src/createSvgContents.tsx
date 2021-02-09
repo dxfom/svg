@@ -4,7 +4,7 @@ import { parseDxfMTextContent } from '@dxfom/mtext'
 import { decodeDxfTextCharacterCodes, DxfTextContentElement, parseDxfTextContent } from '@dxfom/text'
 import { collectDimensionStyleOverrides } from './dstyle'
 import { MTEXT_angle, MTEXT_attachmentPoint, MTEXT_contents, MTEXT_contentsOptions } from './mtext'
-import { $negate, $negates, $number, $numbers, $trim, nearlyEqual, norm, round, trim } from './util'
+import { $negates, $number, $numbers, $trim, nearlyEqual, norm, round, trim } from './util'
 
 export interface CreateSvgContentStringOptions extends MTEXT_contentsOptions {
   readonly warn: (message: string, ...args: any[]) => void
@@ -60,8 +60,13 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
   for (const ltype of dxf.TABLES?.LTYPE ?? []) {
     if ($(ltype, 0) === 'LTYPE') {
       const _strokeDasharray = $$(ltype, 49).map(trim).map(s => s!.startsWith('-') ? s!.slice(1) : s!)
-      const strokeDasharray = _strokeDasharray.length % 2 === 1 ? _strokeDasharray : _strokeDasharray[0] === '0' ? _strokeDasharray.slice(1) : _strokeDasharray.concat('0')
-      ltypeMap[$(ltype, 2)!] = { strokeDasharray: strokeDasharray.join(' ') }
+      const strokeDasharray =
+        _strokeDasharray.length === 0 || _strokeDasharray.length % 2 === 1
+          ? _strokeDasharray
+          : _strokeDasharray[0] === '0'
+          ? _strokeDasharray.slice(1)
+          : _strokeDasharray.concat('0')
+      strokeDasharray.length !== 0 && (ltypeMap[$(ltype, 2)!] = { strokeDasharray: strokeDasharray.join(' ') })
     }
   }
 
@@ -326,16 +331,14 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
         case 0: // Rotated, Horizontal, or Vertical
         case 1: // Aligned
         {
-          const [x1, x2] = $numbers(entity, 13, 14)
-          const [y1, y2] = $negates(entity, 23, 24)
+          const [x0, x1, x2] = $numbers(entity, 10, 13, 14)
+          const [y0, y1, y2] = $negates(entity, 20, 23, 24)
           angle = Math.round(-$number(entity, 50, 0) || 0)
           if (angle % 180 === 0) {
-            const y0 = $negate(entity, 20)
             value = value || Math.abs(x1 - x2) * factor
             lineElements = <path stroke="currentColor" d={`M${x1} ${y1}L${x1} ${y0}L${x2} ${y0}L${x2} ${y2}`} />
             angle = 0
           } else {
-            const x0 = $trim(entity, 10)
             value = value || Math.abs(y1 - y2) * factor
             lineElements = <path stroke="currentColor" d={`M${x1} ${y1}L${x0} ${y1}L${x0} ${y2}L${x2} ${y2}`} />
           }
@@ -484,7 +487,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
     INSERT: entity => {
       const x = $number(entity, 10, 0)
       const y = -$number(entity, 20, 0)
-      const rotate = $negate(entity, 50)
+      const rotate = -$number(entity, 50)
       const xscale = $number(entity, 41, 1) || 1
       const yscale = $number(entity, 42, 1) || 1
       const transform = [

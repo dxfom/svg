@@ -11,9 +11,7 @@ export const round = (() => {
 })()
 
 export const trim = (s: string | undefined) => s ? s.trim() : s
-export const negate = (s: string | undefined) => !s ? s : s.startsWith('-') ? s.slice(1) : '-' + s
 export const $trim = (record: DxfRecordReadonly | undefined, groupCode: number) => trim($(record, groupCode))
-export const $negate = (record: DxfRecordReadonly | undefined, groupCode: number) => negate(trim($(record, groupCode)))
 export const $number = (record: DxfRecordReadonly | undefined, groupCode: number, defaultValue?: number) => {
   const value = +$(record, groupCode)!
   if (isNaN(value)) {
