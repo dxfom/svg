@@ -87,7 +87,7 @@ const $number = (record, groupCode, defaultValue) => {
   }
 
   const rounded = Math.round(value);
-  return Math.abs(rounded - value) < smallNumber ? rounded : value;
+  return Math.abs(rounded - value) < 1e-8 ? rounded : value;
 };
 const $numbers = (record, ...groupCodes) => groupCodes.map(groupCode => $number(record, groupCode));
 const $negates = (record, ...groupCodes) => groupCodes.map(groupCode => -$number(record, groupCode));
@@ -747,7 +747,7 @@ const createEntitySvgMap = (dxf, options) => {
         color: _color(entity),
         transform: transform,
         children: contents
-      }), [x + bbox.x, x + bbox.x + bbox.w * xscale], [y + bbox.y, y + bbox.y + bbox.h * yscale]];
+      }), [x + bbox.x * xscale, x + (bbox.x + bbox.w) * xscale], [y + bbox.y * yscale, y + (bbox.y + bbox.h) * yscale]];
     }
   };
 };

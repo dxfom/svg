@@ -513,8 +513,8 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const [contents, bbox] = entitiesSvg(dxf, block, options)
       return [
         <g {...commonAttributes(entity)} color={_color(entity)} transform={transform}>{contents}</g>,
-        [x + bbox.x, x + bbox.x + bbox.w * xscale],
-        [y + bbox.y, y + bbox.y + bbox.h * yscale],
+        [x + bbox.x * xscale, x + (bbox.x + bbox.w) * xscale],
+        [y + bbox.y * yscale, y + (bbox.y + bbox.h) * yscale],
       ]
     },
   }

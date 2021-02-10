@@ -21,7 +21,7 @@ export const $number = (record: DxfRecordReadonly | undefined, groupCode: number
     throw Error(`group code ${groupCode} is invalid (${value})`)
   }
   const rounded = Math.round(value)
-  return Math.abs(rounded - value) < smallNumber ? rounded : value
+  return Math.abs(rounded - value) < 1e-8 ? rounded : value
 }
 export const $numbers = (record: DxfRecordReadonly, ...groupCodes: readonly number[]) => groupCodes.map(groupCode => $number(record, groupCode))
 export const $negates = (record: DxfRecordReadonly, ...groupCodes: readonly number[]) => groupCodes.map(groupCode => -$number(record, groupCode))
