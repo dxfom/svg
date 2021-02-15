@@ -21,7 +21,7 @@ const jsx = (type, props) => {
     }
   }
 
-  if (type === 'line' || type === 'circle' || type === 'path') {
+  if (type === 'line' || type === 'polyline' || type === 'polygon' || type === 'circle' || type === 'path') {
     if (!props.fill) {
       s += ' fill="none"';
     }
@@ -239,18 +239,14 @@ const textDecorations = ({
 const TEXT_dominantBaseline = [, 'text-after-edge', 'central', 'text-before-edge'];
 const TEXT_textAnchor = [, 'middle', 'end',, 'middle'];
 
-const polylinePath = (xs, ys, close) => {
-  let d = '';
+const polylinePoints = (xs, ys) => {
+  let points = '';
 
   for (let i = 0; i < xs.length; i++) {
-    d += `${d ? 'L' : 'M'}${xs[i]} ${ys[i]}`;
+    points += `${xs[i]},${ys[i]} `;
   }
 
-  if (close) {
-    d += 'Z';
-  }
-
-  return d;
+  return points.slice(0, -1);
 };
 
 const createEntitySvgMap = (dxf, options) => {
@@ -320,19 +316,22 @@ const createEntitySvgMap = (dxf, options) => {
     }
   };
 
+  const lineAttributes = entity => Object.assign(commonAttributes(entity), {
+    stroke: color(entity),
+    'stroke-dasharray': strokeDasharray(entity),
+    style: extrusionStyle(entity)
+  });
+
   return {
     POINT: () => undefined,
     LINE: entity => {
       const xs = $numbers(entity, 10, 11);
       const ys = $negates(entity, 20, 21);
-      return [jsx("line", { ...commonAttributes(entity),
+      return [jsx("line", { ...lineAttributes(entity),
         x1: xs[0],
         y1: ys[0],
         x2: xs[1],
-        y2: ys[1],
-        stroke: color(entity),
-        "stroke-dasharray": strokeDasharray(entity),
-        style: extrusionStyle(entity)
+        y2: ys[1]
       }), xs, ys];
     },
     POLYLINE: (entity, vertices) => {
@@ -341,11 +340,11 @@ const createEntitySvgMap = (dxf, options) => {
       const xs = vertices.map(v => $number(v, 10));
       const ys = vertices.map(v => -$number(v, 20));
       const flags = +((_$2 = getGroupCodeValue(entity, 70)) !== null && _$2 !== void 0 ? _$2 : 0);
-      return [jsx("path", { ...commonAttributes(entity),
-        d: polylinePath(xs, ys, flags & 1),
-        stroke: color(entity),
-        "stroke-dasharray": strokeDasharray(entity),
-        style: extrusionStyle(entity)
+      const attrs = Object.assign(lineAttributes(entity), {
+        points: polylinePoints(xs, ys)
+      });
+      return [flags & 1 ? jsx("polygon", { ...attrs
+      }) : jsx("polyline", { ...attrs
       }), xs, ys];
     },
     LWPOLYLINE: entity => {
@@ -354,22 +353,19 @@ const createEntitySvgMap = (dxf, options) => {
       const xs = getGroupCodeValues(entity, 10).map(s => +s);
       const ys = getGroupCodeValues(entity, 20).map(s => -s);
       const flags = +((_$3 = getGroupCodeValue(entity, 70)) !== null && _$3 !== void 0 ? _$3 : 0);
-      return [jsx("path", { ...commonAttributes(entity),
-        d: polylinePath(xs, ys, flags & 1),
-        stroke: color(entity),
-        "stroke-dasharray": strokeDasharray(entity),
-        style: extrusionStyle(entity)
+      const attrs = Object.assign(lineAttributes(entity), {
+        points: polylinePoints(xs, ys)
+      });
+      return [flags & 1 ? jsx("polygon", { ...attrs
+      }) : jsx("polyline", { ...attrs
       }), xs, ys];
     },
     CIRCLE: entity => {
       const [cx, cy, r] = $numbers(entity, 10, 20, 40);
-      return [jsx("circle", { ...commonAttributes(entity),
+      return [jsx("circle", { ...lineAttributes(entity),
         cx: cx,
         cy: -cy,
-        r: r,
-        stroke: color(entity),
-        "stroke-dasharray": strokeDasharray(entity),
-        style: extrusionStyle(entity)
+        r: r
       }), [cx - r, cx + r], [-cy - r, -cy + r]];
     },
     ARC: entity => {
@@ -383,32 +379,27 @@ const createEntitySvgMap = (dxf, options) => {
       const x2 = cx + r * Math.cos(rad2);
       const y2 = cy + r * Math.sin(rad2);
       const large = (deg2 - deg1 + 360) % 360 <= 180 ? '0' : '1';
-      return [jsx("path", { ...commonAttributes(entity),
-        d: `M${x1} ${-y1}A${r} ${r} 0 ${large} 0 ${x2} ${-y2}`,
-        stroke: color(entity),
-        "stroke-dasharray": strokeDasharray(entity),
-        style: extrusionStyle(entity)
+      return [jsx("path", { ...lineAttributes(entity),
+        d: `M${x1} ${-y1}A${r} ${r} 0 ${large} 0 ${x2} ${-y2}`
       }), [x1, x2], [-y1, -y2]];
     },
     ELLIPSE: entity => {
       // https://wiki.gz-labs.net/index.php/ELLIPSE
-      const [cx, cy, majorX, majorY] = $numbers(entity, 10, 20, 11, 21);
-      const majorR = norm(majorX, majorY);
-      const minorR = $number(entity, 40) * majorR;
-      const radAngleOffset = -Math.atan2(majorY, majorX);
       const rad1 = $number(entity, 41, 0);
       const rad2 = $number(entity, 42, 2 * Math.PI);
 
       if (nearlyEqual(rad1, 0) && nearlyEqual(rad2, 2 * Math.PI)) {
-        return [jsx("ellipse", { ...commonAttributes(entity),
+        const [cx, cy, majorX, majorY] = $numbers(entity, 10, 20, 11, 21);
+        const majorR = norm(majorX, majorY);
+        const minorR = $number(entity, 40) * majorR;
+        const radAngleOffset = -Math.atan2(majorY, majorX);
+        const transform = radAngleOffset ? `rotate(${radAngleOffset * 180 / Math.PI} ${cx} ${-cy})` : undefined;
+        return [jsx("ellipse", { ...lineAttributes(entity),
           cx: cx,
           cy: -cy,
           rx: majorR,
           ry: minorR,
-          stroke: color(entity),
-          "stroke-dasharray": strokeDasharray(entity),
-          transform: radAngleOffset && `rotate(${radAngleOffset * 180 / Math.PI} ${cx} ${-cy})`,
-          style: extrusionStyle(entity)
+          transform: transform
         }), [cx - majorR, cx + majorR], [-cy - minorR, -cy + minorR]];
       } else {
         warn('Elliptical arc cannot be rendered yet.');
@@ -417,8 +408,8 @@ const createEntitySvgMap = (dxf, options) => {
     LEADER: entity => {
       const xs = getGroupCodeValues(entity, 10).map(s => +s);
       const ys = getGroupCodeValues(entity, 20).map(s => -s);
-      return [jsx("path", { ...commonAttributes(entity),
-        d: polylinePath(xs, ys),
+      return [jsx("polyline", { ...commonAttributes(entity),
+        points: polylinePoints(xs, ys),
         stroke: color(entity),
         "stroke-dasharray": strokeDasharray(entity)
       }), xs, ys];
@@ -570,9 +561,9 @@ const createEntitySvgMap = (dxf, options) => {
             value = value || norm(x0 - x1, y0 - y1) * factor;
             lineElements = jsx("path", {
               stroke: "currentColor",
-              d: `M${x0} ${y0}L${x1} ${y1}`
-            });
-            angle = (Math.atan2(y0 - y1, x0 - x1) * 180 / Math.PI + 90) % 180 - 90;
+              d: `M${x0} ${y0}L${x1} ${y1}L${tx} ${ty}`
+            }); // angle = (Math.atan2(y0 - ty, x0 - tx) * 180 / Math.PI + 90) % 180 - 90
+
             xs.push(x0, x1);
             ys.push(y0, y1);
             break;

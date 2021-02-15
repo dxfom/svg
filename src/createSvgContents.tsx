@@ -38,15 +38,12 @@ interface CreateEntitySvgMapResult {
   [entityType: string]: (entity: DxfRecordReadonly, vertices: readonly DxfRecordReadonly[]) => [string, number[], number[]] | undefined
 }
 
-const polylinePath = (xs: readonly number[], ys: readonly number[], close?: unknown) => {
-  let d = ''
+const polylinePoints = (xs: readonly number[], ys: readonly number[]) => {
+  let points = ''
   for (let i = 0; i < xs.length; i++) {
-    d += `${d ? 'L' : 'M'}${xs[i]} ${ys[i]}`
+    points += `${xs[i]},${ys[i]} `
   }
-  if (close) {
-    d += 'Z'
-  }
-  return d
+  return points.slice(0, -1)
 }
 
 const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOptions) => CreateEntitySvgMapResult = (dxf, options) => {
@@ -86,7 +83,6 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
     }
   }
   const color = (entity: DxfRecordReadonly) => _color(entity) || 'currentColor'
-
   const strokeDasharray = (entity: DxfRecordReadonly) => ltypeMap[$(entity, 6) ?? layerMap[$(entity, 8)!]?.ltype!]?.strokeDasharray
   const extrusionStyle = (entity: DxfRecordReadonly) => {
     const extrusionZ = +$trim(entity, 230)!
@@ -94,6 +90,11 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       return 'transform:rotateY(180deg)'
     }
   }
+  const lineAttributes = (entity: DxfRecordReadonly) => Object.assign(commonAttributes(entity), {
+    stroke: color(entity),
+    'stroke-dasharray': strokeDasharray(entity),
+    style: extrusionStyle(entity),
+  })
 
   return {
     POINT: () => undefined,
@@ -101,16 +102,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const xs = $numbers(entity, 10, 11)
       const ys = $negates(entity, 20, 21)
       return [
-        <line
-          {...commonAttributes(entity)}
-          x1={xs[0]}
-          y1={ys[0]}
-          x2={xs[1]}
-          y2={ys[1]}
-          stroke={color(entity)}
-          stroke-dasharray={strokeDasharray(entity)}
-          style={extrusionStyle(entity)}
-        />,
+        <line {...lineAttributes(entity)} x1={xs[0]} y1={ys[0]} x2={xs[1]} y2={ys[1]} />,
         xs,
         ys,
       ]
@@ -119,14 +111,9 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const xs = vertices.map(v => $number(v, 10))
       const ys = vertices.map(v => -$number(v, 20))
       const flags = +($(entity, 70) ?? 0)
+      const attrs = Object.assign(lineAttributes(entity), { points: polylinePoints(xs, ys) })
       return [
-        <path
-          {...commonAttributes(entity)}
-          d={polylinePath(xs, ys, flags & 1)}
-          stroke={color(entity)}
-          stroke-dasharray={strokeDasharray(entity)}
-          style={extrusionStyle(entity)}
-        />,
+        flags & 1 ? <polygon {...attrs} /> : <polyline {...attrs} />,
         xs,
         ys,
       ]
@@ -135,14 +122,9 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const xs = $$(entity, 10).map(s => +s)
       const ys = $$(entity, 20).map(s => -s)
       const flags = +($(entity, 70) ?? 0)
+      const attrs = Object.assign(lineAttributes(entity), { points: polylinePoints(xs, ys) })
       return [
-        <path
-          {...commonAttributes(entity)}
-          d={polylinePath(xs, ys, flags & 1)}
-          stroke={color(entity)}
-          stroke-dasharray={strokeDasharray(entity)}
-          style={extrusionStyle(entity)}
-        />,
+        flags & 1 ? <polygon {...attrs} /> : <polyline {...attrs} />,
         xs,
         ys,
       ]
@@ -150,15 +132,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
     CIRCLE: entity => {
       const [cx, cy, r] = $numbers(entity, 10, 20, 40)
       return [
-        <circle
-          {...commonAttributes(entity)}
-          cx={cx}
-          cy={-cy}
-          r={r}
-          stroke={color(entity)}
-          stroke-dasharray={strokeDasharray(entity)}
-          style={extrusionStyle(entity)}
-        />,
+        <circle {...lineAttributes(entity)} cx={cx} cy={-cy} r={r} />,
         [cx - r, cx + r],
         [-cy - r, -cy + r],
       ]
@@ -175,38 +149,23 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const y2 = cy + r * Math.sin(rad2)
       const large = (deg2 - deg1 + 360) % 360 <= 180 ? '0' : '1'
       return [
-        <path
-          {...commonAttributes(entity)}
-          d={`M${x1} ${-y1}A${r} ${r} 0 ${large} 0 ${x2} ${-y2}`}
-          stroke={color(entity)}
-          stroke-dasharray={strokeDasharray(entity)}
-          style={extrusionStyle(entity)}
-        />,
+        <path {...lineAttributes(entity)} d={`M${x1} ${-y1}A${r} ${r} 0 ${large} 0 ${x2} ${-y2}`} />,
         [x1, x2],
         [-y1, -y2],
       ]
     },
     ELLIPSE: entity => {
       // https://wiki.gz-labs.net/index.php/ELLIPSE
-      const [cx, cy, majorX, majorY] = $numbers(entity, 10, 20, 11, 21)
-      const majorR = norm(majorX, majorY)
-      const minorR = $number(entity, 40)! * majorR
-      const radAngleOffset = -Math.atan2(majorY, majorX)
       const rad1 = $number(entity, 41, 0)
       const rad2 = $number(entity, 42, 2 * Math.PI)
       if (nearlyEqual(rad1, 0) && nearlyEqual(rad2, 2 * Math.PI)) {
+        const [cx, cy, majorX, majorY] = $numbers(entity, 10, 20, 11, 21)
+        const majorR = norm(majorX, majorY)
+        const minorR = $number(entity, 40)! * majorR
+        const radAngleOffset = -Math.atan2(majorY, majorX)
+        const transform = radAngleOffset ? `rotate(${radAngleOffset * 180 / Math.PI} ${cx} ${-cy})` : undefined
         return [
-          <ellipse
-            {...commonAttributes(entity)}
-            cx={cx}
-            cy={-cy}
-            rx={majorR}
-            ry={minorR}
-            stroke={color(entity)}
-            stroke-dasharray={strokeDasharray(entity)}
-            transform={radAngleOffset && `rotate(${radAngleOffset * 180 / Math.PI} ${cx} ${-cy})`}
-            style={extrusionStyle(entity)}
-          />,
+          <ellipse {...lineAttributes(entity)} cx={cx} cy={-cy} rx={majorR} ry={minorR} transform={transform} />,
           [cx - majorR, cx + majorR],
           [-cy - minorR, -cy + minorR],
         ]
@@ -218,9 +177,9 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const xs = $$(entity, 10).map(s => +s)
       const ys = $$(entity, 20).map(s => -s)
       return [
-        <path
+        <polyline
           {...commonAttributes(entity)}
-          d={polylinePath(xs, ys)}
+          points={polylinePoints(xs, ys)}
           stroke={color(entity)}
           stroke-dasharray={strokeDasharray(entity)}
         />,
@@ -358,8 +317,8 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           const [x0, x1] = $numbers(entity, 10, 15)
           const [y0, y1] = $negates(entity, 20, 25)
           value = value || norm(x0 - x1, y0 - y1) * factor
-          lineElements = <path stroke="currentColor" d={`M${x0} ${y0}L${x1} ${y1}`} />
-          angle = (Math.atan2(y0 - y1, x0 - x1) * 180 / Math.PI + 90) % 180 - 90
+          lineElements = <path stroke="currentColor" d={`M${x0} ${y0}L${x1} ${y1}L${tx} ${ty}`} />
+          // angle = (Math.atan2(y0 - ty, x0 - tx) * 180 / Math.PI + 90) % 180 - 90
           xs.push(x0, x1)
           ys.push(y0, y1)
           break

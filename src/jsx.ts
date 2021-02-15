@@ -9,6 +9,8 @@ declare global {
       g: JSXElement<'color' | 'stroke' | 'transform' | 'style'>
       path: JSXElement<'d' | 'stroke' | 'fill' | 'style'>
       line: JSXElement<'x1' | 'y1' | 'x2' | 'y2' | 'stroke' | 'style'>
+      polyline: JSXElement<'points' | 'stroke' | 'style'>
+      polygon: JSXElement<'points' | 'stroke' | 'style'>
       circle: JSXElement<'cx' | 'cy' | 'r' | 'stroke' | 'transform' | 'style'>
       ellipse: JSXElement<'cx' | 'cy' | 'rx' | 'ry' | 'stroke' | 'transform' | 'style'>
       text: JSXElement<'x' | 'y' | 'fill' | 'transform'>
