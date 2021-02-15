@@ -3,46 +3,6 @@ import { getGroupCodeValue, getGroupCodeValues } from '@dxfom/dxf';
 import { parseDxfMTextContent } from '@dxfom/mtext';
 import { parseDxfTextContent, decodeDxfTextCharacterCodes } from '@dxfom/text';
 
-const escapeHtml = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
-
-const jsx = (type, props) => {
-  let s = '<' + type;
-  let children;
-
-  for (const [key, value] of Object.entries(props)) {
-    if (!value) {
-      continue;
-    }
-
-    if (key === 'children') {
-      children = value;
-    } else {
-      s += ` ${key}="${typeof value === 'string' ? escapeHtml(value) : value}"`;
-    }
-  }
-
-  if (type === 'line' || type === 'polyline' || type === 'polygon' || type === 'circle' || type === 'path') {
-    if (!props.fill) {
-      s += ' fill="none"';
-    }
-
-    s += ' vector-effect="non-scaling-stroke"';
-  }
-
-  if (type === 'text') {
-    s += ' stroke="none" style="white-space:pre"';
-  }
-
-  if (children) {
-    s += `>${Array.isArray(children) ? children.join('') : children}</${type}>`;
-  } else {
-    s += '/>';
-  }
-
-  return s;
-};
-const jsxs = jsx;
-
 const collectDimensionStyleOverrides = d => {
   const result = new Map();
 
@@ -92,6 +52,46 @@ const $number = (record, groupCode, defaultValue) => {
 const $numbers = (record, ...groupCodes) => groupCodes.map(groupCode => $number(record, groupCode));
 const $negates = (record, ...groupCodes) => groupCodes.map(groupCode => -$number(record, groupCode));
 const norm = (x, y) => Math.sqrt(x * x + y * y);
+
+const escapeHtml = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+const jsx = (type, props) => {
+  let s = '<' + type;
+  let children;
+
+  for (const [key, value] of Object.entries(props)) {
+    if (!value) {
+      continue;
+    }
+
+    if (key === 'children') {
+      children = value;
+    } else {
+      s += ` ${key}="${typeof value === 'string' ? escapeHtml(value) : value}"`;
+    }
+  }
+
+  if (type === 'line' || type === 'polyline' || type === 'polygon' || type === 'circle' || type === 'path') {
+    if (!props.fill) {
+      s += ' fill="none"';
+    }
+
+    s += ' vector-effect="non-scaling-stroke"';
+  }
+
+  if (type === 'text') {
+    s += ' stroke="none" style="white-space:pre"';
+  }
+
+  if (children) {
+    s += `>${Array.isArray(children) ? children.join('') : children}</${type}>`;
+  } else {
+    s += '/>';
+  }
+
+  return s;
+};
+const jsxs = jsx;
 
 const MTEXT_attachmentPoint = n => {
   n = +n;

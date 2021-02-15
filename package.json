@@ -18,22 +18,22 @@
     "typecheck": "tsc -p .",
     "start": "npm-run-all -p watch:*",
     "watch:mjs": "rollup -c -w",
-    "watch:viewer": "esbuild --bundle --minify --serve viewer/app.ts",
+    "watch:viewer": "esbuild --bundle --minify --serve --servedir=viewer viewer/app.ts",
     "test": "node --harmony --es-module-specifier-resolution=node bin/dxf2svg.mjs sample/1.dxf"
   },
   "devDependencies": {
-    "@babel/core": "^7.12.10",
-    "@babel/plugin-proposal-nullish-coalescing-operator": "^7.12.1",
-    "@babel/plugin-proposal-optional-chaining": "^7.12.7",
-    "@babel/plugin-transform-react-jsx": "^7.12.12",
-    "@babel/preset-typescript": "^7.12.7",
-    "@rollup/plugin-node-resolve": "^11.1.1",
-    "dts-bundle-generator": "^5.6.0",
-    "esbuild": "^0.8.42",
+    "@babel/core": "^7.12.16",
+    "@babel/plugin-proposal-nullish-coalescing-operator": "^7.12.13",
+    "@babel/plugin-proposal-optional-chaining": "^7.12.16",
+    "@babel/plugin-transform-react-jsx": "^7.12.16",
+    "@babel/preset-typescript": "^7.12.16",
+    "@rollup/plugin-node-resolve": "^11.2.0",
+    "dts-bundle-generator": "^5.7.0",
+    "esbuild": "^0.8.46",
     "npm-run-all": "^4.1.5",
-    "rollup": "^2.38.3",
+    "rollup": "^2.39.0",
     "rollup-plugin-babel": "^4.4.0",
-    "typescript": "^4.1.3"
+    "typescript": "^4.1.5"
   },
   "dependencies": {
     "@dxfom/color": "^0.1.1",
