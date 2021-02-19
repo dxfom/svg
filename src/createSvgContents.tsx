@@ -317,7 +317,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           const [x0, x1] = $numbers(entity, 10, 15)
           const [y0, y1] = $negates(entity, 20, 25)
           value = value || norm(x0 - x1, y0 - y1) * factor
-          lineElements = <path stroke="currentColor" d={`M${x0} ${y0}L${x1} ${y1}L${tx} ${ty}`} />
+          lineElements = <path stroke="currentColor" d={`M${x1} ${y1}L${tx} ${ty}`} />
           // angle = (Math.atan2(y0 - ty, x0 - tx) * 180 / Math.PI + 90) % 180 - 90
           xs.push(x0, x1)
           ys.push(y0, y1)
