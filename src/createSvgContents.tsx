@@ -1,10 +1,10 @@
 import { DXF_COLOR_HEX } from '@dxfom/color/hex'
 import { DxfReadonly, DxfRecordReadonly, getGroupCodeValue as $, getGroupCodeValues as $$ } from '@dxfom/dxf'
 import { parseDxfMTextContent } from '@dxfom/mtext'
-import { decodeDxfTextCharacterCodes, DxfTextContentElement, parseDxfTextContent } from '@dxfom/text'
-import { collectDimensionStyleOverrides } from './dstyle'
+import { DxfTextContentElement, parseDxfTextContent } from '@dxfom/text'
+import { collectDimensionStyles, dimensionValueToMText } from './dimension'
 import { MTEXT_angle, MTEXT_attachmentPoint, MTEXT_contents, MTEXT_contentsOptions } from './mtext'
-import { $negates, $number, $numbers, $trim, nearlyEqual, norm, round, trim } from './util'
+import { $negates, $number, $numbers, $trim, nearlyEqual, norm, trim } from './util'
 
 export interface CreateSvgContentStringOptions extends MTEXT_contentsOptions {
   readonly warn: (message: string, ...args: any[]) => void
@@ -20,8 +20,6 @@ const defaultOptions: CreateSvgContentStringOptions = {
 const commonAttributes = (entity: DxfRecordReadonly) => ({
   'data-5': $trim(entity, 5)
 })
-
-const toleranceString = (n: number) => n > 0 ? '+' + n : n < 0 ? String(n) : ' 0'
 
 const textDecorations = ({ k, o, u }: DxfTextContentElement) => {
   const decorations = []
@@ -272,18 +270,12 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       ]
     },
     DIMENSION: entity => {
-      const styleName = $(entity, 3)
-      const style = dxf.TABLES?.DIMSTYLE?.find(style => $(style, 2) === styleName)
-      const styleOverrides = collectDimensionStyleOverrides(entity)
-      const $style = (groupCode: number, headerVar: string, headerCode: number, defaultValue: number) =>
-        +(styleOverrides?.get(groupCode) ?? $(style, groupCode) ?? $(dxf.HEADER?.[headerVar], headerCode) ?? defaultValue)
+      const dimStyles = collectDimensionStyles(dxf, entity)
       let lineElements = ''
-      let value = $number(entity, 42, NaN)
+      let measurement: number
       let dominantBaseline = 'text-after-edge'
       let textAnchor = 'middle'
       let angle: number | undefined
-      value === -1 && (value = NaN)
-      const factor = $style(144, '$DIMLFAC', 40, 1)
       const tx = $number(entity, 11)
       const ty = -$number(entity, 21)
       const xs = [tx]
@@ -297,11 +289,11 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           const [y0, y1, y2] = $negates(entity, 20, 23, 24)
           angle = Math.round(-$number(entity, 50, 0) || 0)
           if (angle % 180 === 0) {
-            value = value || Math.abs(x1 - x2) * factor
+            measurement = Math.abs(x1 - x2)
             lineElements = <path stroke="currentColor" d={`M${x1} ${y1}L${x1} ${y0}L${x2} ${y0}L${x2} ${y2}`} />
             angle = 0
           } else {
-            value = value || Math.abs(y1 - y2) * factor
+            measurement = Math.abs(y1 - y2)
             lineElements = <path stroke="currentColor" d={`M${x1} ${y1}L${x0} ${y1}L${x0} ${y2}L${x2} ${y2}`} />
           }
           xs.push(x1, x2)
@@ -311,15 +303,14 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
         case 2: // Angular
         case 5: // Angular 3-point
           warn('Angular dimension cannot be rendered yet.', entity)
-          break
+          return
         case 3: // Diameter
         case 4: // Radius
         {
           const [x0, x1] = $numbers(entity, 10, 15)
           const [y0, y1] = $negates(entity, 20, 25)
-          value = value || norm(x0 - x1, y0 - y1) * factor
+          measurement = norm(x0 - x1, y0 - y1)
           lineElements = <path stroke="currentColor" d={`M${x1} ${y1}L${tx} ${ty}`} />
-          // angle = (Math.atan2(y0 - ty, x0 - tx) * 180 / Math.PI + 90) % 180 - 90
           xs.push(x0, x1)
           ys.push(y0, y1)
           break
@@ -330,12 +321,12 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           const [y1, y2] = $negates(entity, 23, 24)
           if (dimensionType & 64) {
             const x0 = $number(entity, 10)
-            value = value || Math.abs(x0 - +x1!) * factor
+            measurement = Math.abs(x0 - +x1!)
             lineElements = <path stroke="currentColor" d={`M${x1} ${y1}L${x1} ${y2}L${x2} ${y2}L${tx} ${ty}`} />
             angle = -90
           } else {
             const y0 = -$number(entity, 20)
-            value = value || Math.abs(y0 - +y1!) * factor
+            measurement = Math.abs(y0 - +y1!)
             lineElements = <path stroke="currentColor" d={`M${x1} ${y1}L${x2} ${y1}L${x2} ${y2}L${tx} ${ty}`} />
           }
           dominantBaseline = 'central'
@@ -344,28 +335,15 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           ys.push(y1, y2)
           break
         }
+        default:
+          warn('Unknown dimension type.', entity)
+          return
       }
-      value = round(value, $style(271, '$DIMDEC', 70, 4))
       let textElement: string
       {
-        const h = $style(140, '$DIMTXT', 40, 1) * $style(40, '$DIMSCALE', 40, 1)
-        let valueWithTolerance = String(value)
-        if ($style(71, '$DIMTOL', 70, 0)) {
-          const p = $style(47, '$DIMTP', 40, 0)
-          const n = $style(48, '$DIMTM', 40, 0)
-          if (p || n) {
-            if (p === n) {
-              valueWithTolerance = `${value}  ±${p}`
-            } else {
-              valueWithTolerance = `${value}  {\\S${toleranceString(p)}^${toleranceString(-n)};}`
-            }
-          }
-        }
-        const template = $(entity, 1)
-        const text = template
-          ? decodeDxfTextCharacterCodes(template, options?.encoding).replace(/<>/, valueWithTolerance)
-          : valueWithTolerance
-        const textColor = $style(178, 'DIMCLRT', 70, NaN)
+        const mtext = dimensionValueToMText(measurement, entity, dimStyles)
+        const h = dimStyles.DIMTXT * dimStyles.DIMSCALE
+        const textColor = dimStyles.DIMCLRT
         textElement =
           <text
             x={tx}
@@ -376,7 +354,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
             text-anchor={textAnchor}
             transform={angle && `rotate(${angle} ${tx} ${ty})`}
           >
-            {MTEXT_contents(parseDxfMTextContent(text), options)}
+            {MTEXT_contents(parseDxfMTextContent(mtext, options), options)}
           </text>
       }
       return [

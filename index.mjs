@@ -1,27 +1,7 @@
 import { DXF_COLOR_HEX } from '@dxfom/color/hex';
 import { getGroupCodeValue, getGroupCodeValues } from '@dxfom/dxf';
 import { parseDxfMTextContent } from '@dxfom/mtext';
-import { parseDxfTextContent, decodeDxfTextCharacterCodes } from '@dxfom/text';
-
-const collectDimensionStyleOverrides = d => {
-  const result = new Map();
-
-  for (let i = 0; i < d.length; i++) {
-    if (d[i][0] === 1000 && d[i][1].trim() === 'DSTYLE' && d[i + 1][0] === 1002 && d[i + 1][1].trim() === '{') {
-      for (let j = i + 2; j < d.length; j++) {
-        if (d[j][0] === 1002) {
-          break;
-        }
-
-        if (d[j][0] === 1070) {
-          result.set(+d[j][1], d[++j][1]);
-        }
-      }
-
-      return result;
-    }
-  }
-};
+import { parseDxfTextContent } from '@dxfom/text';
 
 const smallNumber = 1 / 64;
 const nearlyEqual = (a, b) => Math.abs(a - b) < smallNumber;
@@ -52,6 +32,75 @@ const $number = (record, groupCode, defaultValue) => {
 const $numbers = (record, ...groupCodes) => groupCodes.map(groupCode => $number(record, groupCode));
 const $negates = (record, ...groupCodes) => groupCodes.map(groupCode => -$number(record, groupCode));
 const norm = (x, y) => Math.sqrt(x * x + y * y);
+
+const DimStyles = {
+  DIMSCALE: [40, 40, 1],
+  DIMTP: [47, 40, NaN],
+  DIMTM: [48, 40, NaN],
+  DIMTOL: [71, 70, 0],
+  DIMTXT: [140, 40, 1],
+  DIMLFAC: [144, 40, 1],
+  DIMCLRT: [178, 70, NaN],
+  DIMDEC: [271, 70, 4]
+};
+
+const collectDimensionStyleOverrides = d => {
+  const result = new Map();
+
+  for (let i = 0; i < d.length; i++) {
+    if (d[i][0] === 1000 && d[i][1].trim() === 'DSTYLE' && d[i + 1][0] === 1002 && d[i + 1][1].trim() === '{') {
+      for (let j = i + 2; j < d.length; j++) {
+        if (d[j][0] === 1002) {
+          break;
+        }
+
+        if (d[j][0] === 1070) {
+          result.set(+d[j][1], d[++j][1]);
+        }
+      }
+
+      return result;
+    }
+  }
+};
+
+const collectDimensionStyles = (dxf, dimension) => {
+  const styleName = getGroupCodeValue(dimension, 3);
+  const style = dxf.TABLES?.DIMSTYLE?.find(style => getGroupCodeValue(style, 2) === styleName);
+  const styleOverrides = collectDimensionStyleOverrides(dimension);
+  const styles = Object.create(null);
+
+  for (const [variableName, [groupCode, headerGroupCode, defaultValue]] of Object.entries(DimStyles)) {
+    const value = styleOverrides?.get(groupCode) ?? getGroupCodeValue(style, groupCode) ?? getGroupCodeValue(dxf.HEADER?.['$' + variableName], headerGroupCode);
+    styles[variableName] = value !== undefined ? +value : defaultValue;
+  }
+
+  return styles;
+};
+
+const toleranceString = n => n > 0 ? '+' + n : n < 0 ? String(n) : ' 0';
+
+const dimensionValueToMText = (measurement, dimension, styles) => {
+  const savedValue = $number(dimension, 42, -1);
+  const value = round(savedValue !== -1 ? savedValue : measurement * styles.DIMLFAC, styles.DIMDEC);
+  let valueWithTolerance = String(value);
+
+  if (styles.DIMTOL) {
+    const p = styles.DIMTP;
+    const n = styles.DIMTM;
+
+    if (p || n) {
+      if (p === n) {
+        valueWithTolerance = `${value}  ±${p}`;
+      } else {
+        valueWithTolerance = `${value}  {\\S${toleranceString(p)}^${toleranceString(-n)};}`;
+      }
+    }
+  }
+
+  const template = getGroupCodeValue(dimension, 1);
+  return template ? template.replace(/<>/, valueWithTolerance) : valueWithTolerance;
+};
 
 const escapeHtml = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
@@ -217,8 +266,6 @@ const defaultOptions = {
 const commonAttributes = entity => ({
   'data-5': $trim(entity, 5)
 });
-
-const toleranceString = n => n > 0 ? '+' + n : n < 0 ? String(n) : ' 0';
 
 const textDecorations = ({
   k,
@@ -471,19 +518,12 @@ const createEntitySvgMap = (dxf, options) => {
       }), [x, x + h * contents.length], [y, y + h]];
     },
     DIMENSION: entity => {
-      const styleName = getGroupCodeValue(entity, 3);
-      const style = dxf.TABLES?.DIMSTYLE?.find(style => getGroupCodeValue(style, 2) === styleName);
-      const styleOverrides = collectDimensionStyleOverrides(entity);
-
-      const $style = (groupCode, headerVar, headerCode, defaultValue) => +(styleOverrides?.get(groupCode) ?? getGroupCodeValue(style, groupCode) ?? getGroupCodeValue(dxf.HEADER?.[headerVar], headerCode) ?? defaultValue);
-
+      const dimStyles = collectDimensionStyles(dxf, entity);
       let lineElements = '';
-      let value = $number(entity, 42, NaN);
+      let measurement;
       let dominantBaseline = 'text-after-edge';
       let textAnchor = 'middle';
       let angle;
-      value === -1 && (value = NaN);
-      const factor = $style(144, '$DIMLFAC', 40, 1);
       const tx = $number(entity, 11);
       const ty = -$number(entity, 21);
       const xs = [tx];
@@ -501,14 +541,14 @@ const createEntitySvgMap = (dxf, options) => {
             angle = Math.round(-$number(entity, 50, 0) || 0);
 
             if (angle % 180 === 0) {
-              value = value || Math.abs(x1 - x2) * factor;
+              measurement = Math.abs(x1 - x2);
               lineElements = jsx("path", {
                 stroke: "currentColor",
                 d: `M${x1} ${y1}L${x1} ${y0}L${x2} ${y0}L${x2} ${y2}`
               });
               angle = 0;
             } else {
-              value = value || Math.abs(y1 - y2) * factor;
+              measurement = Math.abs(y1 - y2);
               lineElements = jsx("path", {
                 stroke: "currentColor",
                 d: `M${x1} ${y1}L${x0} ${y1}L${x0} ${y2}L${x2} ${y2}`
@@ -525,7 +565,7 @@ const createEntitySvgMap = (dxf, options) => {
         case 5:
           // Angular 3-point
           warn('Angular dimension cannot be rendered yet.', entity);
-          break;
+          return;
 
         case 3: // Diameter
 
@@ -534,12 +574,11 @@ const createEntitySvgMap = (dxf, options) => {
           {
             const [x0, x1] = $numbers(entity, 10, 15);
             const [y0, y1] = $negates(entity, 20, 25);
-            value = value || norm(x0 - x1, y0 - y1) * factor;
+            measurement = norm(x0 - x1, y0 - y1);
             lineElements = jsx("path", {
               stroke: "currentColor",
               d: `M${x1} ${y1}L${tx} ${ty}`
-            }); // angle = (Math.atan2(y0 - ty, x0 - tx) * 180 / Math.PI + 90) % 180 - 90
-
+            });
             xs.push(x0, x1);
             ys.push(y0, y1);
             break;
@@ -553,7 +592,7 @@ const createEntitySvgMap = (dxf, options) => {
 
             if (dimensionType & 64) {
               const x0 = $number(entity, 10);
-              value = value || Math.abs(x0 - +x1) * factor;
+              measurement = Math.abs(x0 - +x1);
               lineElements = jsx("path", {
                 stroke: "currentColor",
                 d: `M${x1} ${y1}L${x1} ${y2}L${x2} ${y2}L${tx} ${ty}`
@@ -561,7 +600,7 @@ const createEntitySvgMap = (dxf, options) => {
               angle = -90;
             } else {
               const y0 = -$number(entity, 20);
-              value = value || Math.abs(y0 - +y1) * factor;
+              measurement = Math.abs(y0 - +y1);
               lineElements = jsx("path", {
                 stroke: "currentColor",
                 d: `M${x1} ${y1}L${x2} ${y1}L${x2} ${y2}L${tx} ${ty}`
@@ -574,30 +613,17 @@ const createEntitySvgMap = (dxf, options) => {
             ys.push(y1, y2);
             break;
           }
+
+        default:
+          warn('Unknown dimension type.', entity);
+          return;
       }
 
-      value = round(value, $style(271, '$DIMDEC', 70, 4));
       let textElement;
       {
-        const h = $style(140, '$DIMTXT', 40, 1) * $style(40, '$DIMSCALE', 40, 1);
-        let valueWithTolerance = String(value);
-
-        if ($style(71, '$DIMTOL', 70, 0)) {
-          const p = $style(47, '$DIMTP', 40, 0);
-          const n = $style(48, '$DIMTM', 40, 0);
-
-          if (p || n) {
-            if (p === n) {
-              valueWithTolerance = `${value}  ±${p}`;
-            } else {
-              valueWithTolerance = `${value}  {\\S${toleranceString(p)}^${toleranceString(-n)};}`;
-            }
-          }
-        }
-
-        const template = getGroupCodeValue(entity, 1);
-        const text = template ? decodeDxfTextCharacterCodes(template, options?.encoding).replace(/<>/, valueWithTolerance) : valueWithTolerance;
-        const textColor = $style(178, 'DIMCLRT', 70, NaN);
+        const mtext = dimensionValueToMText(measurement, entity, dimStyles);
+        const h = dimStyles.DIMTXT * dimStyles.DIMSCALE;
+        const textColor = dimStyles.DIMCLRT;
         textElement = jsx("text", {
           x: tx,
           y: ty,
@@ -606,7 +632,7 @@ const createEntitySvgMap = (dxf, options) => {
           "dominant-baseline": dominantBaseline,
           "text-anchor": textAnchor,
           transform: angle && `rotate(${angle} ${tx} ${ty})`,
-          children: MTEXT_contents(parseDxfMTextContent(text), options)
+          children: MTEXT_contents(parseDxfMTextContent(mtext, options), options)
         });
       }
       return [jsx("g", { ...commonAttributes(entity),
