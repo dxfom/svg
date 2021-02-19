@@ -275,14 +275,15 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const styleName = $(entity, 3)
       const style = dxf.TABLES?.DIMSTYLE?.find(style => $(style, 2) === styleName)
       const styleOverrides = collectDimensionStyleOverrides(entity)
-      const $style = (key: number, defaultValue: number) => +(styleOverrides?.get(key) ?? $(style, key) ?? defaultValue)
+      const $style = (groupCode: number, headerVar: string, headerCode: number, defaultValue: number) =>
+        +(styleOverrides?.get(groupCode) ?? $(style, groupCode) ?? $(dxf.HEADER?.[headerVar], headerCode) ?? defaultValue)
       let lineElements = ''
       let value = $number(entity, 42, NaN)
       let dominantBaseline = 'text-after-edge'
       let textAnchor = 'middle'
       let angle: number | undefined
       value === -1 && (value = NaN)
-      const factor = $style(144, 1)
+      const factor = $style(144, '$DIMLFAC', 40, 1)
       const tx = $number(entity, 11)
       const ty = -$number(entity, 21)
       const xs = [tx]
@@ -344,14 +345,14 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           break
         }
       }
-      value = round(value, $style(271, 0) || +$(dxf.HEADER?.$DIMDEC, 70)! || 4)
+      value = round(value, $style(271, '$DIMDEC', 70, 4))
       let textElement: string
       {
-        const h = ($style(140, 0) || +$(dxf.HEADER?.$DIMTXT, 40)!) * ($style(40, 0) || +$(dxf.HEADER?.$DIMSCALE, 40)! || 1)
+        const h = $style(140, '$DIMTXT', 40, 1) * $style(40, '$DIMSCALE', 40, 1)
         let valueWithTolerance = String(value)
-        if ($style(71, 0)) {
-          const p = $style(47, 0)
-          const n = $style(48, 0)
+        if ($style(71, '$DIMTOL', 70, 0)) {
+          const p = $style(47, '$DIMTP', 40, 0)
+          const n = $style(48, '$DIMTM', 40, 0)
           if (p || n) {
             if (p === n) {
               valueWithTolerance = `${value}  ±${p}`
@@ -364,7 +365,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
         const text = template
           ? decodeDxfTextCharacterCodes(template, options?.encoding).replace(/<>/, valueWithTolerance)
           : valueWithTolerance
-        const textColor = $style(178, NaN)
+        const textColor = $style(178, 'DIMCLRT', 70, NaN)
         textElement =
           <text
             x={tx}
