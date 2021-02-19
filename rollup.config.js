@@ -1,5 +1,5 @@
 import resolve from '@rollup/plugin-node-resolve'
-import babel from 'rollup-plugin-babel'
+import babel from '@rollup/plugin-babel'
 
 export default {
   input: 'src/index.ts',
@@ -16,8 +16,6 @@ export default {
       extensions: ['.ts', '.tsx'],
       presets: ['@babel/preset-typescript'],
       plugins: [
-        '@babel/plugin-proposal-optional-chaining',
-        '@babel/plugin-proposal-nullish-coalescing-operator',
         [
           '@babel/plugin-transform-react-jsx',
           {
@@ -26,6 +24,7 @@ export default {
           },
         ],
       ],
+      babelHelpers: 'bundled',
     })
   ],
   watch: {

@@ -182,14 +182,14 @@ const MTEXT_contents = (contents, options, i = 0) => {
   }
 
   if (content.f) {
-    var _options$resolveFont, _options$resolveFont2;
-
     const _font = {
       family: content.f,
       weight: content.b ? 700 : 400,
       style: content.i ? 'italic' : undefined
     };
-    const font = (_options$resolveFont = options === null || options === void 0 ? void 0 : (_options$resolveFont2 = options.resolveFont) === null || _options$resolveFont2 === void 0 ? void 0 : _options$resolveFont2.call(options, _font)) !== null && _options$resolveFont !== void 0 ? _options$resolveFont : _font;
+
+    const font = options?.resolveFont?.(_font) ?? _font;
+
     return jsx("tspan", {
       "font-family": font.family,
       "font-weight": font.weight,
@@ -211,11 +211,7 @@ const MTEXT_contents = (contents, options, i = 0) => {
 
 const defaultOptions = {
   warn: console.debug,
-  resolveColorIndex: index => {
-    var _DXF_COLOR_HEX$index;
-
-    return (_DXF_COLOR_HEX$index = DXF_COLOR_HEX[index]) !== null && _DXF_COLOR_HEX$index !== void 0 ? _DXF_COLOR_HEX$index : '#888';
-  }
+  resolveColorIndex: index => DXF_COLOR_HEX[index] ?? '#888'
 };
 
 const commonAttributes = entity => ({
@@ -256,9 +252,7 @@ const createEntitySvgMap = (dxf, options) => {
   } = options;
   const layerMap = {};
 
-  for (const layer of (_dxf$TABLES$LAYER = (_dxf$TABLES = dxf.TABLES) === null || _dxf$TABLES === void 0 ? void 0 : _dxf$TABLES.LAYER) !== null && _dxf$TABLES$LAYER !== void 0 ? _dxf$TABLES$LAYER : []) {
-    var _dxf$TABLES$LAYER, _dxf$TABLES;
-
+  for (const layer of dxf.TABLES?.LAYER ?? []) {
     if (getGroupCodeValue(layer, 0) === 'LAYER') {
       layerMap[getGroupCodeValue(layer, 2)] = {
         color: resolveColorIndex(+getGroupCodeValue(layer, 62)),
@@ -269,9 +263,7 @@ const createEntitySvgMap = (dxf, options) => {
 
   const ltypeMap = {};
 
-  for (const ltype of (_dxf$TABLES$LTYPE = (_dxf$TABLES2 = dxf.TABLES) === null || _dxf$TABLES2 === void 0 ? void 0 : _dxf$TABLES2.LTYPE) !== null && _dxf$TABLES$LTYPE !== void 0 ? _dxf$TABLES$LTYPE : []) {
-    var _dxf$TABLES$LTYPE, _dxf$TABLES2;
-
+  for (const ltype of dxf.TABLES?.LTYPE ?? []) {
     if (getGroupCodeValue(ltype, 0) === 'LTYPE') {
       const _strokeDasharray = getGroupCodeValues(ltype, 49).map(trim).map(s => s.startsWith('-') ? s.slice(1) : s);
 
@@ -302,11 +294,7 @@ const createEntitySvgMap = (dxf, options) => {
 
   const color = entity => _color(entity) || 'currentColor';
 
-  const strokeDasharray = entity => {
-    var _ltypeMap, _$, _layerMap;
-
-    return (_ltypeMap = ltypeMap[(_$ = getGroupCodeValue(entity, 6)) !== null && _$ !== void 0 ? _$ : (_layerMap = layerMap[getGroupCodeValue(entity, 8)]) === null || _layerMap === void 0 ? void 0 : _layerMap.ltype]) === null || _ltypeMap === void 0 ? void 0 : _ltypeMap.strokeDasharray;
-  };
+  const strokeDasharray = entity => ltypeMap[getGroupCodeValue(entity, 6) ?? layerMap[getGroupCodeValue(entity, 8)]?.ltype]?.strokeDasharray;
 
   const extrusionStyle = entity => {
     const extrusionZ = +$trim(entity, 230);
@@ -335,11 +323,9 @@ const createEntitySvgMap = (dxf, options) => {
       }), xs, ys];
     },
     POLYLINE: (entity, vertices) => {
-      var _$2;
-
       const xs = vertices.map(v => $number(v, 10));
       const ys = vertices.map(v => -$number(v, 20));
-      const flags = +((_$2 = getGroupCodeValue(entity, 70)) !== null && _$2 !== void 0 ? _$2 : 0);
+      const flags = +(getGroupCodeValue(entity, 70) ?? 0);
       const attrs = Object.assign(lineAttributes(entity), {
         points: polylinePoints(xs, ys)
       });
@@ -348,11 +334,9 @@ const createEntitySvgMap = (dxf, options) => {
       }), xs, ys];
     },
     LWPOLYLINE: entity => {
-      var _$3;
-
       const xs = getGroupCodeValues(entity, 10).map(s => +s);
       const ys = getGroupCodeValues(entity, 20).map(s => -s);
-      const flags = +((_$3 = getGroupCodeValue(entity, 70)) !== null && _$3 !== void 0 ? _$3 : 0);
+      const flags = +(getGroupCodeValue(entity, 70) ?? 0);
       const attrs = Object.assign(lineAttributes(entity), {
         points: polylinePoints(xs, ys)
       });
@@ -467,8 +451,6 @@ const createEntitySvgMap = (dxf, options) => {
       }), [x, x + h * contents.length], [y, y + h]];
     },
     MTEXT: entity => {
-      var _$4;
-
       const [x, h] = $numbers(entity, 10, 40);
       const y = -$number(entity, 20);
       const angle = MTEXT_angle(entity);
@@ -476,7 +458,7 @@ const createEntitySvgMap = (dxf, options) => {
         dominantBaseline,
         textAnchor
       } = MTEXT_attachmentPoint($trim(entity, 71));
-      const contents = getGroupCodeValues(entity, 3).join('') + ((_$4 = getGroupCodeValue(entity, 1)) !== null && _$4 !== void 0 ? _$4 : '');
+      const contents = getGroupCodeValues(entity, 3).join('') + (getGroupCodeValue(entity, 1) ?? '');
       return [jsx("text", { ...commonAttributes(entity),
         x: x,
         y: y,
@@ -489,17 +471,11 @@ const createEntitySvgMap = (dxf, options) => {
       }), [x, x + h * contents.length], [y, y + h]];
     },
     DIMENSION: entity => {
-      var _dxf$TABLES3, _dxf$TABLES3$DIMSTYLE, _dxf$HEADER;
-
       const styleName = getGroupCodeValue(entity, 3);
-      const style = (_dxf$TABLES3 = dxf.TABLES) === null || _dxf$TABLES3 === void 0 ? void 0 : (_dxf$TABLES3$DIMSTYLE = _dxf$TABLES3.DIMSTYLE) === null || _dxf$TABLES3$DIMSTYLE === void 0 ? void 0 : _dxf$TABLES3$DIMSTYLE.find(style => getGroupCodeValue(style, 2) === styleName);
+      const style = dxf.TABLES?.DIMSTYLE?.find(style => getGroupCodeValue(style, 2) === styleName);
       const styleOverrides = collectDimensionStyleOverrides(entity);
 
-      const $style = (key, defaultValue) => {
-        var _ref, _styleOverrides$get;
-
-        return +((_ref = (_styleOverrides$get = styleOverrides === null || styleOverrides === void 0 ? void 0 : styleOverrides.get(key)) !== null && _styleOverrides$get !== void 0 ? _styleOverrides$get : getGroupCodeValue(style, key)) !== null && _ref !== void 0 ? _ref : defaultValue);
-      };
+      const $style = (groupCode, headerVar, headerCode, defaultValue) => +(styleOverrides?.get(groupCode) ?? getGroupCodeValue(style, groupCode) ?? getGroupCodeValue(dxf.HEADER?.[headerVar], headerCode) ?? defaultValue);
 
       let lineElements = '';
       let value = $number(entity, 42, NaN);
@@ -507,7 +483,7 @@ const createEntitySvgMap = (dxf, options) => {
       let textAnchor = 'middle';
       let angle;
       value === -1 && (value = NaN);
-      const factor = $style(144, 1);
+      const factor = $style(144, '$DIMLFAC', 40, 1);
       const tx = $number(entity, 11);
       const ty = -$number(entity, 21);
       const xs = [tx];
@@ -561,7 +537,7 @@ const createEntitySvgMap = (dxf, options) => {
             value = value || norm(x0 - x1, y0 - y1) * factor;
             lineElements = jsx("path", {
               stroke: "currentColor",
-              d: `M${x0} ${y0}L${x1} ${y1}L${tx} ${ty}`
+              d: `M${x1} ${y1}L${tx} ${ty}`
             }); // angle = (Math.atan2(y0 - ty, x0 - tx) * 180 / Math.PI + 90) % 180 - 90
 
             xs.push(x0, x1);
@@ -600,17 +576,15 @@ const createEntitySvgMap = (dxf, options) => {
           }
       }
 
-      value = round(value, $style(271, 0) || +getGroupCodeValue((_dxf$HEADER = dxf.HEADER) === null || _dxf$HEADER === void 0 ? void 0 : _dxf$HEADER.$DIMDEC, 70) || 4);
+      value = round(value, $style(271, '$DIMDEC', 70, 4));
       let textElement;
       {
-        var _dxf$HEADER2, _dxf$HEADER3;
-
-        const h = ($style(140, 0) || +getGroupCodeValue((_dxf$HEADER2 = dxf.HEADER) === null || _dxf$HEADER2 === void 0 ? void 0 : _dxf$HEADER2.$DIMTXT, 40)) * ($style(40, 0) || +getGroupCodeValue((_dxf$HEADER3 = dxf.HEADER) === null || _dxf$HEADER3 === void 0 ? void 0 : _dxf$HEADER3.$DIMSCALE, 40) || 1);
+        const h = $style(140, '$DIMTXT', 40, 1) * $style(40, '$DIMSCALE', 40, 1);
         let valueWithTolerance = String(value);
 
-        if ($style(71, 0)) {
-          const p = $style(47, 0);
-          const n = $style(48, 0);
+        if ($style(71, '$DIMTOL', 70, 0)) {
+          const p = $style(47, '$DIMTP', 40, 0);
+          const n = $style(48, '$DIMTM', 40, 0);
 
           if (p || n) {
             if (p === n) {
@@ -622,8 +596,8 @@ const createEntitySvgMap = (dxf, options) => {
         }
 
         const template = getGroupCodeValue(entity, 1);
-        const text = template ? decodeDxfTextCharacterCodes(template, options === null || options === void 0 ? void 0 : options.encoding).replace(/<>/, valueWithTolerance) : valueWithTolerance;
-        const textColor = $style(178, NaN);
+        const text = template ? decodeDxfTextCharacterCodes(template, options?.encoding).replace(/<>/, valueWithTolerance) : valueWithTolerance;
+        const textColor = $style(178, 'DIMCLRT', 70, NaN);
         textElement = jsx("text", {
           x: tx,
           y: ty,
@@ -688,13 +662,11 @@ const createEntitySvgMap = (dxf, options) => {
         if ($trim(cell, 171) === '2') {
           warn('Table cell type "block" cannot be rendered yet.', entity, cell);
         } else {
-          var _$5;
-
           s += jsx("text", {
             x: x,
             y: y,
             fill: !isNaN(color) ? resolveColorIndex(color) : textColor,
-            children: MTEXT_contents(parseDxfMTextContent((_$5 = getGroupCodeValue(cell, 1)) !== null && _$5 !== void 0 ? _$5 : ''), options)
+            children: MTEXT_contents(parseDxfMTextContent(getGroupCodeValue(cell, 1) ?? ''), options)
           });
         }
 
@@ -721,8 +693,6 @@ const createEntitySvgMap = (dxf, options) => {
       }), xs.map(_x => _x + x), ys.map(_y => _y + y)];
     },
     INSERT: entity => {
-      var _dxf$BLOCKS;
-
       const x = $number(entity, 10, 0);
       const y = -$number(entity, 20, 0);
       const rotate = -$number(entity, 50);
@@ -730,9 +700,9 @@ const createEntitySvgMap = (dxf, options) => {
       const yscale = $number(entity, 42, 1) || 1;
       const transform = [x || y ? `translate(${x},${y})` : '', xscale !== 1 || yscale !== 1 ? `scale(${xscale},${yscale})` : '', rotate ? `rotate(${rotate})` : ''].filter(Boolean).join(' ');
 
-      const _block = (_dxf$BLOCKS = dxf.BLOCKS) === null || _dxf$BLOCKS === void 0 ? void 0 : _dxf$BLOCKS[getGroupCodeValue(entity, 2)];
+      const _block = dxf.BLOCKS?.[getGroupCodeValue(entity, 2)];
 
-      const block = _block === null || _block === void 0 ? void 0 : _block.slice(getGroupCodeValue(_block[0], 0) === 'BLOCK' ? 1 : 0, getGroupCodeValue(_block[_block.length - 1], 0) === 'ENDBLK' ? -1 : undefined);
+      const block = _block?.slice(getGroupCodeValue(_block[0], 0) === 'BLOCK' ? 1 : 0, getGroupCodeValue(_block[_block.length - 1], 0) === 'ENDBLK' ? -1 : undefined);
       const [contents, bbox] = entitiesSvg(dxf, block, options);
       return [jsx("g", { ...commonAttributes(entity),
         color: _color(entity),
