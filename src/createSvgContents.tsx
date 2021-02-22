@@ -4,7 +4,7 @@ import { parseDxfMTextContent } from '@dxfom/mtext'
 import { DxfTextContentElement, parseDxfTextContent } from '@dxfom/text'
 import { collectDimensionStyles, dimensionValueToMText } from './dimension'
 import { MTEXT_angle, MTEXT_attachmentPoint, MTEXT_contents, MTEXT_contentsOptions } from './mtext'
-import { $negates, $number, $numbers, $trim, nearlyEqual, norm, trim } from './util'
+import { $negates, $number, $numbers, $trim, nearlyEqual, trim } from './util'
 
 export interface CreateSvgContentStringOptions extends MTEXT_contentsOptions {
   readonly warn: (message: string, ...args: any[]) => void
@@ -158,7 +158,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const rad2 = $number(entity, 42, 2 * Math.PI)
       if (nearlyEqual(rad1, 0) && nearlyEqual(rad2, 2 * Math.PI)) {
         const [cx, cy, majorX, majorY] = $numbers(entity, 10, 20, 11, 21)
-        const majorR = norm(majorX, majorY)
+        const majorR = Math.hypot(majorX, majorY)
         const minorR = $number(entity, 40)! * majorR
         const radAngleOffset = -Math.atan2(majorY, majorX)
         const transform = radAngleOffset ? `rotate(${radAngleOffset * 180 / Math.PI} ${cx} ${-cy})` : undefined
@@ -309,7 +309,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
         {
           const [x0, x1] = $numbers(entity, 10, 15)
           const [y0, y1] = $negates(entity, 20, 25)
-          measurement = norm(x0 - x1, y0 - y1)
+          measurement = Math.hypot(x0 - x1, y0 - y1)
           lineElements = <path stroke="currentColor" d={`M${x1} ${y1}L${tx} ${ty}`} />
           xs.push(x0, x1)
           ys.push(y0, y1)

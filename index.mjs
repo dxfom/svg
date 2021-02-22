@@ -31,7 +31,6 @@ const $number = (record, groupCode, defaultValue) => {
 };
 const $numbers = (record, ...groupCodes) => groupCodes.map(groupCode => $number(record, groupCode));
 const $negates = (record, ...groupCodes) => groupCodes.map(groupCode => -$number(record, groupCode));
-const norm = (x, y) => Math.sqrt(x * x + y * y);
 
 const DimStyles = {
   DIMSCALE: [40, 40, 1],
@@ -421,7 +420,7 @@ const createEntitySvgMap = (dxf, options) => {
 
       if (nearlyEqual(rad1, 0) && nearlyEqual(rad2, 2 * Math.PI)) {
         const [cx, cy, majorX, majorY] = $numbers(entity, 10, 20, 11, 21);
-        const majorR = norm(majorX, majorY);
+        const majorR = Math.hypot(majorX, majorY);
         const minorR = $number(entity, 40) * majorR;
         const radAngleOffset = -Math.atan2(majorY, majorX);
         const transform = radAngleOffset ? `rotate(${radAngleOffset * 180 / Math.PI} ${cx} ${-cy})` : undefined;
@@ -574,7 +573,7 @@ const createEntitySvgMap = (dxf, options) => {
           {
             const [x0, x1] = $numbers(entity, 10, 15);
             const [y0, y1] = $negates(entity, 20, 25);
-            measurement = norm(x0 - x1, y0 - y1);
+            measurement = Math.hypot(x0 - x1, y0 - y1);
             lineElements = jsx("path", {
               stroke: "currentColor",
               d: `M${x1} ${y1}L${tx} ${ty}`
