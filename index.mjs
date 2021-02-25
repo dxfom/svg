@@ -259,7 +259,8 @@ const MTEXT_contents = (contents, options, i = 0) => {
 
 const defaultOptions = {
   warn: console.debug,
-  resolveColorIndex: index => DXF_COLOR_HEX[index] ?? '#888'
+  resolveColorIndex: colorIndex => DXF_COLOR_HEX[colorIndex] ?? '#888',
+  resolveLineWeight: lineWeight => lineWeight === -3 ? 0.5 : lineWeight * 10
 };
 
 const commonAttributes = entity => ({
@@ -294,15 +295,18 @@ const polylinePoints = (xs, ys) => {
 const createEntitySvgMap = (dxf, options) => {
   const {
     warn,
-    resolveColorIndex
+    resolveColorIndex,
+    resolveLineWeight
   } = options;
   const layerMap = {};
 
   for (const layer of dxf.TABLES?.LAYER ?? []) {
     if (getGroupCodeValue(layer, 0) === 'LAYER') {
+      const strokeWidth = $number(layer, 370);
       layerMap[getGroupCodeValue(layer, 2)] = {
         color: resolveColorIndex(+getGroupCodeValue(layer, 62)),
-        ltype: getGroupCodeValue(layer, 6)
+        ltype: getGroupCodeValue(layer, 6),
+        strokeWidth: isNaN(strokeWidth) ? undefined : strokeWidth
       };
     }
   }
@@ -342,6 +346,24 @@ const createEntitySvgMap = (dxf, options) => {
 
   const strokeDasharray = entity => ltypeMap[getGroupCodeValue(entity, 6) ?? layerMap[getGroupCodeValue(entity, 8)]?.ltype]?.strokeDasharray;
 
+  const strokeWidth = entity => {
+    const value = $trim(entity, 370);
+
+    switch (value) {
+      case '-3':
+        return resolveLineWeight(-3);
+
+      case '-2':
+        return resolveLineWeight(layerMap[getGroupCodeValue(entity, 8)]?.strokeWidth ?? -3);
+
+      case '-1':
+        return;
+
+      default:
+        return resolveLineWeight(+value / 100);
+    }
+  };
+
   const extrusionStyle = entity => {
     const extrusionZ = +$trim(entity, 230);
 
@@ -352,6 +374,7 @@ const createEntitySvgMap = (dxf, options) => {
 
   const lineAttributes = entity => Object.assign(commonAttributes(entity), {
     stroke: color(entity),
+    'stroke-width': strokeWidth(entity),
     'stroke-dasharray': strokeDasharray(entity),
     style: extrusionStyle(entity)
   });
@@ -636,6 +659,7 @@ const createEntitySvgMap = (dxf, options) => {
       }
       return [jsx("g", { ...commonAttributes(entity),
         color: color(entity),
+        "stroke-width": strokeWidth(entity),
         "stroke-dasharray": strokeDasharray(entity),
         style: extrusionStyle(entity),
         children: lineElements + textElement
@@ -729,8 +753,10 @@ const createEntitySvgMap = (dxf, options) => {
 
       const block = _block?.slice(getGroupCodeValue(_block[0], 0) === 'BLOCK' ? 1 : 0, getGroupCodeValue(_block[_block.length - 1], 0) === 'ENDBLK' ? -1 : undefined);
       const [contents, bbox] = entitiesSvg(dxf, block, options);
-      return [jsx("g", { ...commonAttributes(entity),
+      return [jsx("g", { ...lineAttributes(entity),
         color: _color(entity),
+        "stroke-width": strokeWidth(entity),
+        "stroke-dasharray": strokeDasharray(entity),
         transform: transform,
         children: contents
       }), [x + bbox.x * xscale, x + (bbox.x + bbox.w) * xscale], [y + bbox.y * yscale, y + (bbox.y + bbox.h) * yscale]];

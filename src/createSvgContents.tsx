@@ -9,12 +9,14 @@ import { $negates, $number, $numbers, $trim, nearlyEqual, trim } from './util'
 export interface CreateSvgContentStringOptions extends MTEXT_contentsOptions {
   readonly warn: (message: string, ...args: any[]) => void
   readonly resolveColorIndex: (colorIndex: number) => string
+  readonly resolveLineWeight: (lineWeight: number) => number
   readonly encoding?: string | TextDecoder
 }
 
 const defaultOptions: CreateSvgContentStringOptions = {
   warn: console.debug,
-  resolveColorIndex: (index: number) => DXF_COLOR_HEX[index] ?? '#888',
+  resolveColorIndex: colorIndex => DXF_COLOR_HEX[colorIndex] ?? '#888',
+  resolveLineWeight: lineWeight => lineWeight === -3 ? 0.5 : lineWeight * 10
 }
 
 const commonAttributes = (entity: DxfRecordReadonly) => ({
@@ -45,11 +47,12 @@ const polylinePoints = (xs: readonly number[], ys: readonly number[]) => {
 }
 
 const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOptions) => CreateEntitySvgMapResult = (dxf, options) => {
-  const { warn, resolveColorIndex } = options
-  const layerMap: Record<string, undefined | { color: string; ltype?: string }> = {}
+  const { warn, resolveColorIndex, resolveLineWeight } = options
+  const layerMap: Record<string, undefined | { color: string; ltype?: string, strokeWidth: number | undefined }> = {}
   for (const layer of dxf.TABLES?.LAYER ?? []) {
     if ($(layer, 0) === 'LAYER') {
-      layerMap[$(layer, 2)!] = { color: resolveColorIndex(+$(layer, 62)!), ltype: $(layer, 6) }
+      const strokeWidth = $number(layer, 370)
+      layerMap[$(layer, 2)!] = { color: resolveColorIndex(+$(layer, 62)!), ltype: $(layer, 6), strokeWidth: isNaN(strokeWidth) ? undefined : strokeWidth }
     }
   }
 
@@ -82,6 +85,15 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
   }
   const color = (entity: DxfRecordReadonly) => _color(entity) || 'currentColor'
   const strokeDasharray = (entity: DxfRecordReadonly) => ltypeMap[$(entity, 6) ?? layerMap[$(entity, 8)!]?.ltype!]?.strokeDasharray
+  const strokeWidth = (entity: DxfRecordReadonly) => {
+    const value = $trim(entity, 370)!
+    switch (value) {
+      case '-3': return resolveLineWeight(-3)
+      case '-2': return resolveLineWeight(layerMap[$(entity, 8)!]?.strokeWidth ?? -3)
+      case '-1': return
+      default: return resolveLineWeight(+value / 100)
+    }
+  }
   const extrusionStyle = (entity: DxfRecordReadonly) => {
     const extrusionZ = +$trim(entity, 230)!
     if (extrusionZ && Math.abs(extrusionZ + 1) < 1 / 64) {
@@ -90,6 +102,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
   }
   const lineAttributes = (entity: DxfRecordReadonly) => Object.assign(commonAttributes(entity), {
     stroke: color(entity),
+    'stroke-width': strokeWidth(entity),
     'stroke-dasharray': strokeDasharray(entity),
     style: extrusionStyle(entity),
   })
@@ -361,6 +374,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
         <g
           {...commonAttributes(entity)}
           color={color(entity)}
+          stroke-width={strokeWidth(entity)}
           stroke-dasharray={strokeDasharray(entity)}
           style={extrusionStyle(entity)}
         >
@@ -450,7 +464,15 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       )
       const [contents, bbox] = entitiesSvg(dxf, block, options)
       return [
-        <g {...commonAttributes(entity)} color={_color(entity)} transform={transform}>{contents}</g>,
+        <g
+          {...lineAttributes(entity)}
+          color={_color(entity)}
+          stroke-width={strokeWidth(entity)}
+          stroke-dasharray={strokeDasharray(entity)}
+          transform={transform}
+        >
+          {contents}
+        </g>,
         [x + bbox.x * xscale, x + (bbox.x + bbox.w) * xscale],
         [y + bbox.y * yscale, y + (bbox.y + bbox.h) * yscale],
       ]

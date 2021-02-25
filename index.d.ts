@@ -12,6 +12,7 @@ export interface MTEXT_contentsOptions {
 export interface CreateSvgContentStringOptions extends MTEXT_contentsOptions {
 	readonly warn: (message: string, ...args: any[]) => void;
 	readonly resolveColorIndex: (colorIndex: number) => string;
+	readonly resolveLineWeight: (lineWeight: number) => number;
 	readonly encoding?: string | TextDecoder;
 }
 export declare const createSvgContents: (dxf: DxfReadonly, options?: Partial<CreateSvgContentStringOptions> | undefined) => readonly [
