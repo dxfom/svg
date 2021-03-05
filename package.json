@@ -22,16 +22,16 @@
     "test": "node --harmony --es-module-specifier-resolution=node bin/dxf2svg.mjs sample/1.dxf"
   },
   "devDependencies": {
-    "@babel/core": "^7.12.17",
+    "@babel/core": "^7.13.8",
     "@babel/plugin-transform-react-jsx": "^7.12.17",
-    "@babel/preset-typescript": "^7.12.17",
+    "@babel/preset-typescript": "^7.13.0",
     "@rollup/plugin-babel": "^5.3.0",
     "@rollup/plugin-node-resolve": "^11.2.0",
     "dts-bundle-generator": "^5.7.0",
-    "esbuild": "^0.8.49",
+    "esbuild": "^0.8.55",
     "npm-run-all": "^4.1.5",
-    "rollup": "^2.39.0",
-    "typescript": "^4.1.5"
+    "rollup": "^2.40.0",
+    "typescript": "^4.2.3"
   },
   "dependencies": {
     "@dxfom/color": "^0.1.1",
