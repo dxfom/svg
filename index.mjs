@@ -267,6 +267,13 @@ const commonAttributes = entity => ({
   'data-5': $trim(entity, 5)
 });
 
+const normalizeVector3 = ([x, y, z]) => {
+  const a = Math.hypot(x, y, z);
+  return [x / a, y / a, z / a];
+};
+
+const crossProduct = ([a1, a2, a3], [b1, b2, b3]) => [a2 * b3 - a3 * b2, a3 * b1 - a1 * b3, a1 * b2 - a2 * b1];
+
 const textDecorations = ({
   k,
   o,
@@ -365,11 +372,18 @@ const createEntitySvgMap = (dxf, options) => {
   };
 
   const extrusionStyle = entity => {
-    const extrusionZ = +$trim(entity, 230);
+    const extrusionX = -$number(entity, 210, 0);
+    const extrusionY = $number(entity, 220, 0);
+    const extrusionZ = $number(entity, 230, 1);
 
-    if (extrusionZ && Math.abs(extrusionZ + 1) < 1 / 64) {
-      return 'transform:rotateY(180deg)';
+    if (Math.abs(extrusionX) < 1 / 64 && Math.abs(extrusionY) < 1 / 64) {
+      return extrusionZ < 0 ? 'transform:rotateY(180deg)' : undefined;
     }
+
+    const az = normalizeVector3([extrusionX, extrusionY, extrusionZ]);
+    const ax = normalizeVector3(crossProduct([0, 0, 1], az));
+    const ay = normalizeVector3(crossProduct(az, ax));
+    return `transform:matrix3d(${ax},0,${ay},0,0,0,0,0,0,0,0,1)`;
   };
 
   const lineAttributes = entity => Object.assign(commonAttributes(entity), {

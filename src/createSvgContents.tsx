@@ -23,6 +23,18 @@ const commonAttributes = (entity: DxfRecordReadonly) => ({
   'data-5': $trim(entity, 5)
 })
 
+type Vec3 = [number, number, number]
+
+const normalizeVector3 = ([x, y, z]: Readonly<Vec3>): Vec3 => {
+  const a = Math.hypot(x, y, z)
+  return [x / a, y / a, z / a]
+}
+const crossProduct = ([a1, a2, a3]: Readonly<Vec3>, [b1, b2, b3]: Readonly<Vec3>): Vec3 => [
+  a2 * b3 - a3 * b2,
+  a3 * b1 - a1 * b3,
+  a1 * b2 - a2 * b1
+]
+
 const textDecorations = ({ k, o, u }: DxfTextContentElement) => {
   const decorations = []
   k && decorations.push('line-through')
@@ -95,10 +107,16 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
     }
   }
   const extrusionStyle = (entity: DxfRecordReadonly) => {
-    const extrusionZ = +$trim(entity, 230)!
-    if (extrusionZ && Math.abs(extrusionZ + 1) < 1 / 64) {
-      return 'transform:rotateY(180deg)'
+    const extrusionX = -$number(entity, 210, 0)
+    const extrusionY = $number(entity, 220, 0)
+    const extrusionZ = $number(entity, 230, 1)
+    if (Math.abs(extrusionX) < 1 / 64 && Math.abs(extrusionY) < 1 / 64) {
+      return extrusionZ < 0 ? 'transform:rotateY(180deg)' : undefined
     }
+    const az = normalizeVector3([extrusionX, extrusionY, extrusionZ] as const)
+    const ax = normalizeVector3(crossProduct([0, 0, 1], az))
+    const ay = normalizeVector3(crossProduct(az, ax))
+    return `transform:matrix3d(${ax},0,${ay},0,0,0,0,0,0,0,0,1)`
   }
   const lineAttributes = (entity: DxfRecordReadonly) => Object.assign(commonAttributes(entity), {
     stroke: color(entity),
