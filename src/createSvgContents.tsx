@@ -166,7 +166,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       ]
     },
     HATCH: entity => {
-      const paths = collectHatchPathElements(entity)
+      const paths = collectHatchPathElements(entity, context)
       let d = ''
       for (const { 10: xs, 20: ys } of paths) {
         d += `M${xs[0]} ${-ys[0]}`
@@ -175,7 +175,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
         }
       }
       d += 'Z'
-      const [fill, defs] = hatchFill(entity, context)
+      const [fill, defs] = hatchFill(entity, paths, context)
       return [
         defs + <path {...commonAttributes(entity)} d={d} fill={fill} />,
         paths.flatMap(path => path[10]),

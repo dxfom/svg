@@ -18,7 +18,7 @@ interface HatchPatternElement {
   49: number[]
 }
 
-export const collectHatchPathElements = (hatch: DxfRecordReadonly): HatchPathElement[] => {
+export const collectHatchPathElements = (hatch: DxfRecordReadonly, context: Context): HatchPathElement[] => {
   const index = hatch.findIndex(groupCode => groupCode[0] === 91)
   if (index === -1) {
     return []
@@ -33,7 +33,7 @@ export const collectHatchPathElements = (hatch: DxfRecordReadonly): HatchPathEle
         break
       case 10:
       case 20:
-        currentPath?.[groupCode].push(round(hatch[i][1]))
+        currentPath?.[groupCode].push(context.roundCoordinate(hatch[i][1]))
         break
     }
   }
@@ -72,7 +72,10 @@ const collectHatchPatternElements = (hatch: DxfRecordReadonly): HatchPatternElem
   return patterns
 }
 
-const hatchGradientDefs: Record<string, (id: string, colors: readonly [string, string], hatch: DxfRecordReadonly) => string> = {
+const hatchGradientDefs: Record<
+  string,
+  (id: string, colors: readonly [string, string], hatch: DxfRecordReadonly, paths: readonly HatchPathElement[]) => string
+> = {
   LINEAR: (id, colors, hatch) => {
     const angle = round(($number(hatch, 460) * 180) / Math.PI)
     return (
@@ -92,9 +95,8 @@ const hatchGradientDefs: Record<string, (id: string, colors: readonly [string, s
       </linearGradient>
     )
   },
-  INVCYLINDER: (id, colors, hatch) => hatchGradientDefs.CYLINDER(id, [colors[1], colors[0]], hatch),
-  SPHERICAL: (id, colors, hatch) => {
-    const paths = collectHatchPathElements(hatch)
+  INVCYLINDER: (id, colors, hatch, paths) => hatchGradientDefs.CYLINDER(id, [colors[1], colors[0]], hatch, paths),
+  SPHERICAL: (id, colors, _, paths) => {
     const xs = paths.flatMap(({ 10: x }) => x)
     const ys = paths.flatMap(({ 20: y }) => y)
     const xMin = Math.min(...xs)
@@ -114,24 +116,24 @@ const hatchGradientDefs: Record<string, (id: string, colors: readonly [string, s
       </radialGradient>
     )
   },
-  INVSPHERICAL: (id, colors, hatch) => hatchGradientDefs.SPHERICAL(id, [colors[1], colors[0]], hatch),
+  INVSPHERICAL: (id, colors, hatch, paths) => hatchGradientDefs.SPHERICAL(id, [colors[1], colors[0]], hatch, paths),
   HEMISPHERICAL: (id, colors) => (
     <radialGradient id={id} cy="1" gradientTransform="translate(-.75,-1.5) scale(2.5)">
       <stop stop-color={colors[1]} />
       <stop stop-color={colors[0]} offset="1" />
     </radialGradient>
   ),
-  INVHEMISPHERICAL: (id, colors, hatch) => hatchGradientDefs.HEMISPHERICAL(id, [colors[1], colors[0]], hatch),
+  INVHEMISPHERICAL: (id, colors, hatch, paths) => hatchGradientDefs.HEMISPHERICAL(id, [colors[1], colors[0]], hatch, paths),
   CURVED: (id, colors) => (
     <radialGradient id={id} cy="1" gradientTransform="translate(-1,-2) scale(3)">
       <stop stop-color={colors[1]} />
       <stop stop-color={colors[0]} offset="1" />
     </radialGradient>
   ),
-  INVCURVED: (id, colors, hatch) => hatchGradientDefs.CURVED(id, [colors[1], colors[0]], hatch),
+  INVCURVED: (id, colors, hatch, paths) => hatchGradientDefs.CURVED(id, [colors[1], colors[0]], hatch, paths),
 }
 
-export const hatchFill = (hatch: DxfRecordReadonly, context: Context): [string, string] => {
+export const hatchFill = (hatch: DxfRecordReadonly, paths: readonly HatchPathElement[], context: Context): [string, string] => {
   const fillColor = context.color(hatch)
   if ($trim(hatch, 450) === '1') {
     // gradient
@@ -139,7 +141,7 @@ export const hatchFill = (hatch: DxfRecordReadonly, context: Context): [string, 
     const colorIndices = $$(hatch, 63)
     const colors = [context.resolveColorIndex(+colorIndices[0] || 5), context.resolveColorIndex(+colorIndices[1] || 2)] as const
     const gradientPatternName = $trim(hatch, 470)
-    const defs = gradientPatternName && hatchGradientDefs[gradientPatternName]?.(id, colors, hatch)
+    const defs = gradientPatternName && hatchGradientDefs[gradientPatternName]?.(id, colors, hatch, paths)
     return defs ? [`url(#${id})`, `<defs>${defs}</defs>`] : [fillColor, '']
   } else if ($trim(hatch, 70) === '1') {
     // solid

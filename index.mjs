@@ -245,7 +245,7 @@ const jsxs = jsx;
 
 const round = n => round$1(n, 6);
 
-const collectHatchPathElements = hatch => {
+const collectHatchPathElements = (hatch, context) => {
   const index = hatch.findIndex(groupCode => groupCode[0] === 91);
 
   if (index === -1) {
@@ -268,7 +268,7 @@ const collectHatchPathElements = hatch => {
 
       case 10:
       case 20:
-        currentPath?.[groupCode].push(round(hatch[i][1]));
+        currentPath?.[groupCode].push(context.roundCoordinate(hatch[i][1]));
         break;
     }
   }
@@ -358,9 +358,8 @@ const hatchGradientDefs = {
       })]
     });
   },
-  INVCYLINDER: (id, colors, hatch) => hatchGradientDefs.CYLINDER(id, [colors[1], colors[0]], hatch),
-  SPHERICAL: (id, colors, hatch) => {
-    const paths = collectHatchPathElements(hatch);
+  INVCYLINDER: (id, colors, hatch, paths) => hatchGradientDefs.CYLINDER(id, [colors[1], colors[0]], hatch, paths),
+  SPHERICAL: (id, colors, _, paths) => {
     const xs = paths.flatMap(({
       10: x
     }) => x);
@@ -385,7 +384,7 @@ const hatchGradientDefs = {
       })]
     });
   },
-  INVSPHERICAL: (id, colors, hatch) => hatchGradientDefs.SPHERICAL(id, [colors[1], colors[0]], hatch),
+  INVSPHERICAL: (id, colors, hatch, paths) => hatchGradientDefs.SPHERICAL(id, [colors[1], colors[0]], hatch, paths),
   HEMISPHERICAL: (id, colors) => jsxs("radialGradient", {
     id: id,
     cy: "1",
@@ -397,7 +396,7 @@ const hatchGradientDefs = {
       offset: "1"
     })]
   }),
-  INVHEMISPHERICAL: (id, colors, hatch) => hatchGradientDefs.HEMISPHERICAL(id, [colors[1], colors[0]], hatch),
+  INVHEMISPHERICAL: (id, colors, hatch, paths) => hatchGradientDefs.HEMISPHERICAL(id, [colors[1], colors[0]], hatch, paths),
   CURVED: (id, colors) => jsxs("radialGradient", {
     id: id,
     cy: "1",
@@ -409,9 +408,9 @@ const hatchGradientDefs = {
       offset: "1"
     })]
   }),
-  INVCURVED: (id, colors, hatch) => hatchGradientDefs.CURVED(id, [colors[1], colors[0]], hatch)
+  INVCURVED: (id, colors, hatch, paths) => hatchGradientDefs.CURVED(id, [colors[1], colors[0]], hatch, paths)
 };
-const hatchFill = (hatch, context) => {
+const hatchFill = (hatch, paths, context) => {
   const fillColor = context.color(hatch);
 
   if ($trim(hatch, 450) === '1') {
@@ -420,7 +419,7 @@ const hatchFill = (hatch, context) => {
     const colorIndices = getGroupCodeValues(hatch, 63);
     const colors = [context.resolveColorIndex(+colorIndices[0] || 5), context.resolveColorIndex(+colorIndices[1] || 2)];
     const gradientPatternName = $trim(hatch, 470);
-    const defs = gradientPatternName && hatchGradientDefs[gradientPatternName]?.(id, colors, hatch);
+    const defs = gradientPatternName && hatchGradientDefs[gradientPatternName]?.(id, colors, hatch, paths);
     return defs ? [`url(#${id})`, `<defs>${defs}</defs>`] : [fillColor, ''];
   } else if ($trim(hatch, 70) === '1') {
     // solid
@@ -772,7 +771,7 @@ const createEntitySvgMap = (dxf, options) => {
       }), xs, ys];
     },
     HATCH: entity => {
-      const paths = collectHatchPathElements(entity);
+      const paths = collectHatchPathElements(entity, context);
       let d = '';
 
       for (const {
@@ -787,7 +786,7 @@ const createEntitySvgMap = (dxf, options) => {
       }
 
       d += 'Z';
-      const [fill, defs] = hatchFill(entity, context);
+      const [fill, defs] = hatchFill(entity, paths, context);
       return [defs + jsx("path", { ...commonAttributes(entity),
         d: d,
         fill: fill
