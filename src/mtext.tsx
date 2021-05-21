@@ -40,7 +40,7 @@ export const MTEXT_angle = (mtext: DxfRecordReadonly): number => {
   for (let i = mtext.length - 1; i >= 0; i--) {
     switch (mtext[i][0]) {
       case 50:
-        return round(+mtext[i][1], 5) || 0
+        return round(mtext[i][1], 5) || 0
       case 11:
         return yx2angle($number(mtext, 12), +mtext[i][1])
       case 21:

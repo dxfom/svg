@@ -3,11 +3,11 @@ import { DxfRecordReadonly, getGroupCodeValue as $ } from '@dxfom/dxf'
 const smallNumber = 1 / 64
 export const nearlyEqual = (a: number, b: number) => Math.abs(a - b) < smallNumber
 export const round = (() => {
-  const _shift = (n: number, precision: number): number => {
+  const _shift = (n: number | string, precision: number): number => {
     const [d, e] = ('' + n).split('e')
     return +(d + 'e' + (e ? +e + precision : precision))
   }
-  return (n: number, precision: number) => _shift(Math.round(_shift(n, precision)), -precision)
+  return (n: number | string, precision: number) => _shift(Math.round(_shift(n, precision)), -precision)
 })()
 
 export const trim = (s: string | undefined) => s ? s.trim() : s

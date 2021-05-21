@@ -3,6 +3,7 @@ import { DxfReadonly, DxfRecordReadonly, getGroupCodeValue as $, getGroupCodeVal
 import { parseDxfMTextContent } from '@dxfom/mtext'
 import { DxfTextContentElement, parseDxfTextContent } from '@dxfom/text'
 import { collectDimensionStyles, dimensionValueToMText } from './dimension'
+import { collectHatchPathElements, hatchFill } from './hatch'
 import { MTEXT_angle, MTEXT_attachmentPoint, MTEXT_contents, MTEXT_contentsOptions } from './mtext'
 import { $negates, $number, $numbers, $trim, nearlyEqual, trim } from './util'
 
@@ -217,28 +218,20 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       ]
     },
     HATCH: entity => {
-      const paths = entity.slice(
-        entity.findIndex(groupCode => groupCode[0] === 92),
-        entity.findIndex(groupCode => groupCode[0] === 97),
-      )
-      const x1s = $$(paths, 10).map(s => +s)
-      const y1s = $$(paths, 20).map(s => -s)
-      const x2s = $$(paths, 11).map(s => +s)
-      const y2s = $$(paths, 21).map(s => -s)
+      const paths = collectHatchPathElements(entity)
       let d = ''
-      for (let i = 0; i < x1s.length; i++) {
-        if (!x2s[i]) {
-          d += `${i === 0 ? 'M' : 'L'}${x1s[i]} ${y1s[i]}`
-        } else if (x1s[i] === x2s[i - 1] && y1s[i] === y2s[i - 1]) {
-          d += `L${x2s[i]} ${y2s[i]}`
-        } else {
-          d += `M${x1s[i]} ${y1s[i]}L${x2s[i]} ${y2s[i]}`
+      for (const { 10: xs, 20: ys } of paths) {
+        d += `M${xs[0]} ${-ys[0]}`
+        for (let i = 1; i < xs.length; i++) {
+          d += `L${xs[i]} ${-ys[i]}`
         }
       }
+      d += 'Z'
+      const [fill, defs] = hatchFill(entity, color, resolveColorIndex)
       return [
-        <path {...commonAttributes(entity)} d={d} fill={color(entity)} fill-opacity='.3' />,
-        [...x1s, ...x2s],
-        [...y1s, ...y2s],
+        defs + <path {...commonAttributes(entity)} d={d} fill={fill} />,
+        paths.flatMap(path => path[10]),
+        paths.flatMap(path => -path[20]),
       ]
     },
     SOLID: entity => {
@@ -264,7 +257,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           font-size={h}
           dominant-baseline={TEXT_dominantBaseline[$trim(entity, 73) as string & number]}
           text-anchor={TEXT_textAnchor[$trim(entity, 72) as string & number]}
-          transform={angle && `rotate(${angle} ${x} ${y})`}
+          transform={angle ? `rotate(${angle} ${x} ${y})` : ''}
           text-decoration={contents.length === 1 && textDecorations(contents[0])}
         >
           {
@@ -383,7 +376,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
             font-size={h}
             dominant-baseline={dominantBaseline}
             text-anchor={textAnchor}
-            transform={angle && `rotate(${angle} ${tx} ${ty})`}
+            transform={angle ? `rotate(${angle} ${tx} ${ty})` : ''}
           >
             {MTEXT_contents(parseDxfMTextContent(mtext, options), options)}
           </text>

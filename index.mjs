@@ -5,7 +5,7 @@ import { parseDxfTextContent } from '@dxfom/text';
 
 const smallNumber = 1 / 64;
 const nearlyEqual = (a, b) => Math.abs(a - b) < smallNumber;
-const round = (() => {
+const round$1 = (() => {
   const _shift = (n, precision) => {
     const [d, e] = ('' + n).split('e');
     return +(d + 'e' + (e ? +e + precision : precision));
@@ -81,7 +81,7 @@ const toleranceString = n => n > 0 ? '+' + n : n < 0 ? String(n) : ' 0';
 
 const dimensionValueToMText = (measurement, dimension, styles) => {
   const savedValue = $number(dimension, 42, -1);
-  const value = round(savedValue !== -1 ? savedValue : measurement * styles.DIMLFAC, styles.DIMDEC);
+  const value = round$1(savedValue !== -1 ? savedValue : measurement * styles.DIMLFAC, styles.DIMDEC);
   let valueWithTolerance = String(value);
 
   if (styles.DIMTOL) {
@@ -108,7 +108,7 @@ const jsx = (type, props) => {
   let children;
 
   for (const [key, value] of Object.entries(props)) {
-    if (!value) {
+    if (!value && value !== 0) {
       continue;
     }
 
@@ -140,6 +140,248 @@ const jsx = (type, props) => {
   return s;
 };
 const jsxs = jsx;
+
+const round = n => round$1(n, 6);
+
+const collectHatchPathElements = hatch => {
+  const index = hatch.findIndex(groupCode => groupCode[0] === 91);
+
+  if (index === -1) {
+    return [];
+  }
+
+  const paths = [];
+  let currentPath;
+
+  for (let i = index + 1; hatch[i] && hatch[i][0] !== 98; i++) {
+    const groupCode = hatch[i][0];
+
+    switch (groupCode) {
+      case 92:
+        paths.push(currentPath = {
+          10: [],
+          20: []
+        });
+        break;
+
+      case 10:
+      case 20:
+        currentPath?.[groupCode].push(round(hatch[i][1]));
+        break;
+    }
+  }
+
+  return paths;
+};
+
+const collectHatchPatternElements = hatch => {
+  const index = hatch.findIndex(groupCode => groupCode[0] === 78);
+
+  if (index === -1) {
+    return [];
+  }
+
+  const patterns = [];
+  let currentPattern;
+
+  for (let i = index + 1; hatch[i]; i++) {
+    const groupCode = hatch[i][0];
+    const value = round(hatch[i][1]);
+
+    switch (groupCode) {
+      case 53:
+        patterns.push(currentPattern = {
+          53: value,
+          43: 0,
+          44: 0,
+          45: 0,
+          46: 0,
+          49: []
+        });
+        break;
+
+      case 43:
+      case 44:
+      case 45:
+      case 46:
+        currentPattern && (currentPattern[groupCode] = value);
+        break;
+
+      case 49:
+        currentPattern?.[49].push(value);
+        break;
+
+      case 79:
+        break;
+
+      default:
+        return patterns;
+    }
+  }
+
+  return patterns;
+};
+
+const hatchGradientDefs = {
+  LINEAR: (id, colors, hatch) => {
+    const angle = round($number(hatch, 460) * 180 / Math.PI);
+    return jsxs("linearGradient", {
+      id: id,
+      x2: "1",
+      y2: "0",
+      gradientTransform: angle ? `rotate(${-angle},.5,.5)` : '',
+      children: [jsx("stop", {
+        "stop-color": colors[0]
+      }), jsx("stop", {
+        "stop-color": colors[1],
+        offset: "1"
+      })]
+    });
+  },
+  CYLINDER: (id, colors, hatch) => {
+    const angle = round($number(hatch, 460) * 180 / Math.PI);
+    return jsxs("linearGradient", {
+      id: id,
+      x2: "1",
+      y2: "0",
+      gradientTransform: angle ? `rotate(${-angle},.5,.5)` : '',
+      children: [jsx("stop", {
+        "stop-color": colors[0]
+      }), jsx("stop", {
+        "stop-color": colors[1],
+        offset: ".5"
+      }), jsx("stop", {
+        "stop-color": colors[0],
+        offset: "1"
+      })]
+    });
+  },
+  INVCYLINDER: (id, colors, hatch) => hatchGradientDefs.CYLINDER(id, [colors[1], colors[0]], hatch),
+  SPHERICAL: (id, colors, hatch) => {
+    const paths = collectHatchPathElements(hatch);
+    const xs = paths.flatMap(({
+      10: x
+    }) => x);
+    const ys = paths.flatMap(({
+      20: y
+    }) => y);
+    const xMin = Math.min(...xs);
+    const xMax = Math.max(...xs);
+    const yMin = Math.min(...ys);
+    const yMax = Math.max(...ys);
+    return jsxs("radialGradient", {
+      id: id,
+      cx: (xMin + xMax) / 2,
+      cy: -(yMin + yMax) / 2,
+      r: Math.max(xMax - xMin, yMax - yMin) / 2,
+      gradientUnits: "userSpaceOnUse",
+      children: [jsx("stop", {
+        "stop-color": colors[1]
+      }), jsx("stop", {
+        "stop-color": colors[0],
+        offset: "1"
+      })]
+    });
+  },
+  INVSPHERICAL: (id, colors, hatch) => hatchGradientDefs.SPHERICAL(id, [colors[1], colors[0]], hatch),
+  HEMISPHERICAL: (id, colors) => jsxs("radialGradient", {
+    id: id,
+    cy: "1",
+    gradientTransform: "translate(-.75,-1.5) scale(2.5)",
+    children: [jsx("stop", {
+      "stop-color": colors[1]
+    }), jsx("stop", {
+      "stop-color": colors[0],
+      offset: "1"
+    })]
+  }),
+  INVHEMISPHERICAL: (id, colors, hatch) => hatchGradientDefs.HEMISPHERICAL(id, [colors[1], colors[0]], hatch),
+  CURVED: (id, colors) => jsxs("radialGradient", {
+    id: id,
+    cy: "1",
+    gradientTransform: "translate(-1,-2) scale(3)",
+    children: [jsx("stop", {
+      "stop-color": colors[1]
+    }), jsx("stop", {
+      "stop-color": colors[0],
+      offset: "1"
+    })]
+  }),
+  INVCURVED: (id, colors, hatch) => hatchGradientDefs.CURVED(id, [colors[1], colors[0]], hatch)
+};
+const hatchFill = (hatch, color, resolveColorIndex) => {
+  const fillColor = color(hatch);
+
+  if ($trim(hatch, 450) === '1') {
+    // gradient
+    const id = `hatch-gradient-${getGroupCodeValue(hatch, 5)}`;
+    const colorIndices = getGroupCodeValues(hatch, 63);
+    const colors = [resolveColorIndex(+colorIndices[0] || 5), resolveColorIndex(+colorIndices[1] || 2)];
+    const gradientPatternName = $trim(hatch, 470);
+    const defs = gradientPatternName && hatchGradientDefs[gradientPatternName]?.(id, colors, hatch);
+    return defs ? [`url(#${id})`, `<defs>${defs}</defs>`] : [fillColor, ''];
+  } else if ($trim(hatch, 70) === '1') {
+    // solid
+    return [fillColor, ''];
+  } else {
+    // pattern
+    const patternElements = collectHatchPatternElements(hatch);
+
+    if (patternElements.length === 0) {
+      return [fillColor, ''];
+    }
+
+    const handle = getGroupCodeValue(hatch, 5);
+    const id = `hatch-pattern-${handle}`;
+    const bgGroupCodeIndex = hatch.findIndex(([groupCode, value]) => groupCode === 1001 && value === 'HATCHBACKGROUNDCOLOR');
+    const bgColorIndex = bgGroupCodeIndex !== -1 && +hatch[bgGroupCodeIndex + 1][1] & 255;
+    const bgColor = bgColorIndex && resolveColorIndex(bgColorIndex);
+    return [`url(#${id})`, jsxs("defs", {
+      children: [patternElements.map(({
+        53: angle,
+        43: xBase,
+        44: yBase,
+        45: xOffset,
+        46: yOffset,
+        49: dasharray
+      }, i) => {
+        dasharray[0] < 0 && dasharray.unshift(0);
+        dasharray.length % 2 === 1 && dasharray.push(0);
+        dasharray = dasharray.map(Math.abs);
+        const height = round(Math.hypot(xOffset, yOffset));
+        const width = round(dasharray.reduce((x, y) => x + y, 0)) || 256;
+        const transform = (xBase || yBase ? `translate(${xBase},${-yBase})${angle ? ' ' : ''}` : '') + (angle ? `rotate(${-angle})` : '');
+        return jsx("pattern", {
+          id: `${id}-${i}`,
+          width: width,
+          height: height,
+          patternUnits: "userSpaceOnUse",
+          patternTransform: transform,
+          children: jsx("line", {
+            x2: width,
+            "stroke-width": "1",
+            stroke: fillColor,
+            "stroke-dasharray": dasharray.join(' ')
+          })
+        });
+      }).join(''), jsx("pattern", {
+        id: id,
+        width: 256,
+        height: 256,
+        patternUnits: "userSpaceOnUse",
+        children: (bgColor ? jsx("rect", {
+          fill: bgColor,
+          width: 256,
+          height: 256
+        }) : '') + patternElements.map((_, i) => jsx("rect", {
+          fill: `url(#hatch-pattern-${handle}-${i})`,
+          width: 256,
+          height: 256
+        })).join('')
+      })]
+    })];
+  }
+};
 
 const MTEXT_attachmentPoint = n => {
   n = +n;
@@ -182,13 +424,13 @@ const MTEXT_attachmentPoint = n => {
   };
 };
 
-const yx2angle = (y, x) => round(Math.atan2(y || 0, x || 0) * 180 / Math.PI, 5) || 0;
+const yx2angle = (y, x) => round$1(Math.atan2(y || 0, x || 0) * 180 / Math.PI, 5) || 0;
 
 const MTEXT_angle = mtext => {
   for (let i = mtext.length - 1; i >= 0; i--) {
     switch (mtext[i][0]) {
       case 50:
-        return round(+mtext[i][1], 5) || 0;
+        return round$1(mtext[i][1], 5) || 0;
 
       case 11:
         return yx2angle($number(mtext, 12), +mtext[i][1]);
@@ -482,28 +724,26 @@ const createEntitySvgMap = (dxf, options) => {
       }), xs, ys];
     },
     HATCH: entity => {
-      const paths = entity.slice(entity.findIndex(groupCode => groupCode[0] === 92), entity.findIndex(groupCode => groupCode[0] === 97));
-      const x1s = getGroupCodeValues(paths, 10).map(s => +s);
-      const y1s = getGroupCodeValues(paths, 20).map(s => -s);
-      const x2s = getGroupCodeValues(paths, 11).map(s => +s);
-      const y2s = getGroupCodeValues(paths, 21).map(s => -s);
+      const paths = collectHatchPathElements(entity);
       let d = '';
 
-      for (let i = 0; i < x1s.length; i++) {
-        if (!x2s[i]) {
-          d += `${i === 0 ? 'M' : 'L'}${x1s[i]} ${y1s[i]}`;
-        } else if (x1s[i] === x2s[i - 1] && y1s[i] === y2s[i - 1]) {
-          d += `L${x2s[i]} ${y2s[i]}`;
-        } else {
-          d += `M${x1s[i]} ${y1s[i]}L${x2s[i]} ${y2s[i]}`;
+      for (const {
+        10: xs,
+        20: ys
+      } of paths) {
+        d += `M${xs[0]} ${-ys[0]}`;
+
+        for (let i = 1; i < xs.length; i++) {
+          d += `L${xs[i]} ${-ys[i]}`;
         }
       }
 
-      return [jsx("path", { ...commonAttributes(entity),
+      d += 'Z';
+      const [fill, defs] = hatchFill(entity, color, resolveColorIndex);
+      return [defs + jsx("path", { ...commonAttributes(entity),
         d: d,
-        fill: color(entity),
-        "fill-opacity": ".3"
-      }), [...x1s, ...x2s], [...y1s, ...y2s]];
+        fill: fill
+      }), paths.flatMap(path => path[10]), paths.flatMap(path => -path[20])];
     },
     SOLID: entity => {
       const [x1, x2, x3, x4] = $numbers(entity, 10, 11, 12, 13);
@@ -525,7 +765,7 @@ const createEntitySvgMap = (dxf, options) => {
         "font-size": h,
         "dominant-baseline": TEXT_dominantBaseline[$trim(entity, 73)],
         "text-anchor": TEXT_textAnchor[$trim(entity, 72)],
-        transform: angle && `rotate(${angle} ${x} ${y})`,
+        transform: angle ? `rotate(${angle} ${x} ${y})` : '',
         "text-decoration": contents.length === 1 && textDecorations(contents[0]),
         children: contents.length === 1 ? contents[0].text : contents.map(content => jsx("tspan", {
           "text-decoration": textDecorations(content),
@@ -667,7 +907,7 @@ const createEntitySvgMap = (dxf, options) => {
           "font-size": h,
           "dominant-baseline": dominantBaseline,
           "text-anchor": textAnchor,
-          transform: angle && `rotate(${angle} ${tx} ${ty})`,
+          transform: angle ? `rotate(${angle} ${tx} ${ty})` : '',
           children: MTEXT_contents(parseDxfMTextContent(mtext, options), options)
         });
       }

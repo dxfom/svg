@@ -4,7 +4,7 @@ export const jsx = (type: string, props: Record<string, unknown>) => {
   let s = '<' + type
   let children: string | undefined
   for (const [key, value] of Object.entries(props)) {
-    if (!value) {
+    if (!value && value !== 0) {
       continue
     }
     if (key === 'children') {
