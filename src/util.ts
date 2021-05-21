@@ -4,7 +4,7 @@ const smallNumber = 1 / 64
 export const nearlyEqual = (a: number, b: number) => Math.abs(a - b) < smallNumber
 export const round = (() => {
   const _shift = (n: number | string, precision: number): number => {
-    const [d, e] = ('' + n).split('e')
+    const [d, e] = String(n).split('e')
     return +(d + 'e' + (e ? +e + precision : precision))
   }
   return (n: number | string, precision: number) => _shift(Math.round(_shift(n, precision)), -precision)
@@ -28,7 +28,7 @@ export const $numbers = (record: DxfRecordReadonly, ...groupCodes: readonly numb
 export const $negates = (record: DxfRecordReadonly, ...groupCodes: readonly number[]) =>
   groupCodes.map(groupCode => -$number(record, groupCode))
 
-export const translate = (x?: number, y?: number) => (x || y ? `translate(${x},${y})` : '')
+export const translate = (x?: number, y?: number) => (x || y ? `translate(${x || 0},${y || 0})` : '')
 export const rotate = (angle?: number, x?: number, y?: number) =>
   !angle || Math.abs(angle) < 0.01 ? '' : x || y ? `rotate(${angle},${x || 0},${y || 0})` : `rotate(${angle})`
 export const transforms = (...s: readonly string[]) => s.filter(Boolean).join(' ')

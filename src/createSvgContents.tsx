@@ -6,7 +6,7 @@ import { Context } from './Context'
 import { collectDimensionStyles, dimensionValueToMText } from './dimension'
 import { collectHatchPathElements, hatchFill } from './hatch'
 import { MTEXT_angle, MTEXT_attachmentPoint, MTEXT_contents, MTEXT_contentsOptions } from './mtext'
-import { $negates, $number, $numbers, $trim, nearlyEqual, rotate, transforms, translate } from './util'
+import { $number, $trim, nearlyEqual, rotate, round, transforms, translate } from './util'
 
 export interface CreateSvgContentStringOptions extends MTEXT_contentsOptions {
   readonly warn: (message: string, ...args: any[]) => void
@@ -18,7 +18,7 @@ export interface CreateSvgContentStringOptions extends MTEXT_contentsOptions {
 const defaultOptions: CreateSvgContentStringOptions = {
   warn: console.debug,
   resolveColorIndex: colorIndex => DXF_COLOR_HEX[colorIndex] ?? '#888',
-  resolveLineWeight: lineWeight => (lineWeight === -3 ? 0.5 : lineWeight * 10),
+  resolveLineWeight: lineWeight => (lineWeight === -3 ? 0.5 : round(lineWeight * 10, 6)),
 }
 
 const commonAttributes = (entity: DxfRecordReadonly) => ({
@@ -74,6 +74,8 @@ const polylinePoints = (xs: readonly number[], ys: readonly number[]) => {
 const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOptions) => CreateEntitySvgMapResult = (dxf, options) => {
   const { warn, resolveColorIndex } = options
   const context = new Context(dxf, options)
+  const roundCoordinate: typeof context.roundCoordinate = n => context.roundCoordinate(n)
+  const $roundCoordinate = (entity: DxfRecordReadonly, groupCode: number) => roundCoordinate($(entity, groupCode))
 
   const lineAttributes = (entity: DxfRecordReadonly) =>
     Object.assign(commonAttributes(entity), {
@@ -86,30 +88,36 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
   const entitySvgMap: CreateEntitySvgMapResult = {
     POINT: () => undefined,
     LINE: entity => {
-      const xs = $numbers(entity, 10, 11)
-      const ys = $negates(entity, 20, 21)
-      return [<line {...lineAttributes(entity)} x1={xs[0]} y1={ys[0]} x2={xs[1]} y2={ys[1]} />, xs, ys]
+      const x1 = $roundCoordinate(entity, 10)
+      const x2 = $roundCoordinate(entity, 11)
+      const y1 = -$roundCoordinate(entity, 20)
+      const y2 = -$roundCoordinate(entity, 21)
+      return [<line {...lineAttributes(entity)} x1={x1} y1={y1} x2={x2} y2={y2} />, [x1, x2], [y1, y2]]
     },
     POLYLINE: (entity, vertices) => {
-      const xs = vertices.map(v => $number(v, 10))
-      const ys = vertices.map(v => -$number(v, 20))
+      const xs = vertices.map(v => $roundCoordinate(v, 10))
+      const ys = vertices.map(v => -$roundCoordinate(v, 20))
       const flags = +($(entity, 70) ?? 0)
       const attrs = Object.assign(lineAttributes(entity), { points: polylinePoints(xs, ys) })
       return [flags & 1 ? <polygon {...attrs} /> : <polyline {...attrs} />, xs, ys]
     },
     LWPOLYLINE: entity => {
-      const xs = $$(entity, 10).map(s => +s)
-      const ys = $$(entity, 20).map(s => -s)
+      const xs = $$(entity, 10).map(s => roundCoordinate(s))
+      const ys = $$(entity, 20).map(s => -roundCoordinate(s))
       const flags = +($(entity, 70) ?? 0)
       const attrs = Object.assign(lineAttributes(entity), { points: polylinePoints(xs, ys) })
       return [flags & 1 ? <polygon {...attrs} /> : <polyline {...attrs} />, xs, ys]
     },
     CIRCLE: entity => {
-      const [cx, cy, r] = $numbers(entity, 10, 20, 40)
-      return [<circle {...lineAttributes(entity)} cx={cx} cy={-cy} r={r} />, [cx - r, cx + r], [-cy - r, -cy + r]]
+      const cx = $roundCoordinate(entity, 10)
+      const cy = -$roundCoordinate(entity, 20)
+      const r = $roundCoordinate(entity, 40)
+      return [<circle {...lineAttributes(entity)} cx={cx} cy={cy} r={r} />, [cx - r, cx + r], [cy - r, cy + r]]
     },
     ARC: entity => {
-      const [cx, cy, r] = $numbers(entity, 10, 20, 40)
+      const cx = $roundCoordinate(entity, 10)
+      const cy = $roundCoordinate(entity, 20)
+      const r = $roundCoordinate(entity, 40)
       const deg1 = $number(entity, 50, 0)
       const deg2 = $number(entity, 51, 0)
       const rad1 = (deg1 * Math.PI) / 180
@@ -126,23 +134,26 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const rad1 = $number(entity, 41, 0)
       const rad2 = $number(entity, 42, 2 * Math.PI)
       if (nearlyEqual(rad1, 0) && nearlyEqual(rad2, 2 * Math.PI)) {
-        const [cx, cy, majorX, majorY] = $numbers(entity, 10, 20, 11, 21)
+        const cx = $roundCoordinate(entity, 10)
+        const cy = -$roundCoordinate(entity, 20)
+        const majorX = $roundCoordinate(entity, 11)
+        const majorY = $roundCoordinate(entity, 21)
         const majorR = Math.hypot(majorX, majorY)
         const minorR = $number(entity, 40)! * majorR
         const radAngleOffset = -Math.atan2(majorY, majorX)
-        const transform = rotate((radAngleOffset * 180) / Math.PI, cx, -cy)
+        const transform = rotate((radAngleOffset * 180) / Math.PI, cx, cy)
         return [
-          <ellipse {...lineAttributes(entity)} cx={cx} cy={-cy} rx={majorR} ry={minorR} transform={transform} />,
+          <ellipse {...lineAttributes(entity)} cx={cx} cy={cy} rx={majorR} ry={minorR} transform={transform} />,
           [cx - majorR, cx + majorR],
-          [-cy - minorR, -cy + minorR],
+          [cy - minorR, cy + minorR],
         ]
       } else {
         warn('Elliptical arc cannot be rendered yet.')
       }
     },
     LEADER: entity => {
-      const xs = $$(entity, 10).map(s => +s)
-      const ys = $$(entity, 20).map(s => -s)
+      const xs = $$(entity, 10).map(s => roundCoordinate(s))
+      const ys = $$(entity, 20).map(s => -roundCoordinate(s))
       return [
         <polyline
           {...commonAttributes(entity)}
@@ -172,14 +183,22 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       ]
     },
     SOLID: entity => {
-      const [x1, x2, x3, x4] = $numbers(entity, 10, 11, 12, 13)
-      const [y1, y2, y3, y4] = $negates(entity, 20, 21, 22, 23)
+      const x1 = $roundCoordinate(entity, 10)
+      const x2 = $roundCoordinate(entity, 11)
+      const x3 = $roundCoordinate(entity, 12)
+      const x4 = $roundCoordinate(entity, 13)
+      const y1 = -$roundCoordinate(entity, 20)
+      const y2 = -$roundCoordinate(entity, 21)
+      const y3 = -$roundCoordinate(entity, 22)
+      const y4 = -$roundCoordinate(entity, 23)
       const d = `M${x1} ${y1}L${x2} ${y2}L${x3} ${y3}${x3 !== x4 || y3 !== y4 ? `L${x4} ${y4}` : ''}Z`
       return [<path {...commonAttributes(entity)} d={d} fill={context.color(entity)} />, [x1, x2, x3, x4], [y1, y2, y3, y4]]
     },
     TEXT: entity => {
-      const [x, h] = $numbers(entity, 10, 40)
-      const [y, angle] = $negates(entity, 20, 50)
+      const x = $roundCoordinate(entity, 10)
+      const y = -$roundCoordinate(entity, 20)
+      const h = $roundCoordinate(entity, 40)
+      const angle = -$number(entity, 50)
       const contents = parseDxfTextContent($(entity, 1) || '', options)
       return [
         <text
@@ -202,8 +221,9 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       ]
     },
     MTEXT: entity => {
-      const [x, h] = $numbers(entity, 10, 40)
-      const y = -$number(entity, 20)
+      const x = $roundCoordinate(entity, 10)
+      const y = -$roundCoordinate(entity, 20)
+      const h = $roundCoordinate(entity, 40)
       const angle = MTEXT_angle(entity)
       const { dominantBaseline, textAnchor } = MTEXT_attachmentPoint($trim(entity, 71))
       const contents = $$(entity, 3).join('') + ($(entity, 1) ?? '')
@@ -231,8 +251,10 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       let dominantBaseline = 'text-after-edge'
       let textAnchor = 'middle'
       let angle: number | undefined
-      const tx = $number(entity, 11)
-      const ty = -$number(entity, 21)
+      const tx = $roundCoordinate(entity, 11)
+      const ty = -$roundCoordinate(entity, 21)
+      const x0 = $roundCoordinate(entity, 10)
+      const y0 = -$roundCoordinate(entity, 20)
       const xs = [tx]
       const ys = [ty]
       const dimensionType = $number(entity, 70, 0)
@@ -240,19 +262,21 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
         case 0: // Rotated, Horizontal, or Vertical
         case 1: {
           // Aligned
-          const [x0, x1, x2] = $numbers(entity, 10, 13, 14)
-          const [y0, y1, y2] = $negates(entity, 20, 23, 24)
+          const x3 = $roundCoordinate(entity, 13)
+          const x4 = $roundCoordinate(entity, 14)
+          const y3 = -$roundCoordinate(entity, 23)
+          const y4 = -$roundCoordinate(entity, 24)
           angle = Math.round(-$number(entity, 50, 0) || 0)
           if (angle % 180 === 0) {
-            measurement = Math.abs(x1 - x2)
-            lineElements = <path stroke="currentColor" d={`M${x1} ${y1}L${x1} ${y0}L${x2} ${y0}L${x2} ${y2}`} />
+            measurement = Math.abs(x3 - x4)
+            lineElements = <path stroke="currentColor" d={`M${x3} ${y3}L${x3} ${y0}L${x4} ${y0}L${x4} ${y4}`} />
             angle = 0
           } else {
-            measurement = Math.abs(y1 - y2)
-            lineElements = <path stroke="currentColor" d={`M${x1} ${y1}L${x0} ${y1}L${x0} ${y2}L${x2} ${y2}`} />
+            measurement = Math.abs(y3 - y4)
+            lineElements = <path stroke="currentColor" d={`M${x3} ${y3}L${x0} ${y3}L${x0} ${y4}L${x4} ${y4}`} />
           }
-          xs.push(x1, x2)
-          ys.push(y1, y2)
+          xs.push(x3, x4)
+          ys.push(y3, y4)
           break
         }
         case 2: // Angular
@@ -262,32 +286,32 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
         case 3: // Diameter
         case 4: {
           // Radius
-          const [x0, x1] = $numbers(entity, 10, 15)
-          const [y0, y1] = $negates(entity, 20, 25)
-          measurement = Math.hypot(x0 - x1, y0 - y1)
-          lineElements = <path stroke="currentColor" d={`M${x1} ${y1}L${tx} ${ty}`} />
-          xs.push(x0, x1)
-          ys.push(y0, y1)
+          const x5 = $roundCoordinate(entity, 15)
+          const y5 = -$roundCoordinate(entity, 25)
+          measurement = Math.hypot(x0 - x5, y0 - y5)
+          lineElements = <path stroke="currentColor" d={`M${x5} ${y5}L${tx} ${ty}`} />
+          xs.push(x0, x5)
+          ys.push(y0, y5)
           break
         }
         case 6: {
           // Ordinate
-          const [x1, x2] = $numbers(entity, 13, 14)
-          const [y1, y2] = $negates(entity, 23, 24)
+          const x3 = $roundCoordinate(entity, 13)
+          const x4 = $roundCoordinate(entity, 14)
+          const y3 = -$roundCoordinate(entity, 23)
+          const y4 = -$roundCoordinate(entity, 24)
           if (dimensionType & 64) {
-            const x0 = $number(entity, 10)
-            measurement = Math.abs(x0 - +x1!)
-            lineElements = <path stroke="currentColor" d={`M${x1} ${y1}L${x1} ${y2}L${x2} ${y2}L${tx} ${ty}`} />
+            measurement = Math.abs(x0 - +x3!)
+            lineElements = <path stroke="currentColor" d={`M${x3} ${y3}L${x3} ${y4}L${x4} ${y4}L${tx} ${ty}`} />
             angle = -90
           } else {
-            const y0 = -$number(entity, 20)
-            measurement = Math.abs(y0 - +y1!)
-            lineElements = <path stroke="currentColor" d={`M${x1} ${y1}L${x2} ${y1}L${x2} ${y2}L${tx} ${ty}`} />
+            measurement = Math.abs(y0 - +y3!)
+            lineElements = <path stroke="currentColor" d={`M${x3} ${y3}L${x4} ${y3}L${x4} ${y4}L${tx} ${ty}`} />
           }
           dominantBaseline = 'central'
           textAnchor = 'middle'
-          xs.push(x1, x2)
-          ys.push(y1, y2)
+          xs.push(x3, x4)
+          ys.push(y3, y4)
           break
         }
         default:
@@ -372,8 +396,8 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
         }
       }
       s += <line x1={xs[xs.length - 1]} y1="0" x2={xs[xs.length - 1]} y2={ys[ys.length - 1]} stroke={lineColor} />
-      const x = $number(entity, 10)
-      const y = -$number(entity, 20)
+      const x = $roundCoordinate(entity, 10)
+      const y = -$roundCoordinate(entity, 20)
       return [
         <g {...commonAttributes(entity)} font-size={$trim(entity, 140)} dominant-baseline="text-before-edge" transform={translate(x, y)}>
           {s}
@@ -383,8 +407,8 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       ]
     },
     INSERT: entity => {
-      const x = $number(entity, 10, 0)
-      const y = -$number(entity, 20, 0)
+      const x = $roundCoordinate(entity, 10)
+      const y = -$roundCoordinate(entity, 20)
       const angle = -$number(entity, 50)
       const xscale = $number(entity, 41, 1) || 1
       const yscale = $number(entity, 42, 1) || 1

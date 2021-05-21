@@ -12,12 +12,15 @@ export class Context {
     undefined | Readonly<{ color: string; ltype: string | undefined; strokeWidth: number | undefined }>
   >()
   private readonly ltypeMap = new Map<string, undefined | { strokeDasharray: string }>()
+
   readonly resolveColorIndex
   readonly resolveLineWeight
+  readonly $LUPREC
 
   constructor(readonly dxf: DxfReadonly, options: ContextOptions) {
     this.resolveColorIndex = options.resolveColorIndex
     this.resolveLineWeight = options.resolveLineWeight
+    this.$LUPREC = +$(dxf.HEADER?.$LUPREC, 70)! || 4
 
     for (const layer of dxf.TABLES?.LAYER ?? []) {
       if ($(layer, 0) !== 'LAYER') {
@@ -84,5 +87,9 @@ export class Context {
 
   strokeDasharray(entity: DxfRecordReadonly) {
     return this.ltype(entity)?.strokeDasharray
+  }
+
+  roundCoordinate(n: number | string | undefined) {
+    return n === undefined ? NaN : round(n, this.$LUPREC)
   }
 }

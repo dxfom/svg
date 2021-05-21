@@ -7,7 +7,7 @@ const smallNumber = 1 / 64;
 const nearlyEqual = (a, b) => Math.abs(a - b) < smallNumber;
 const round$1 = (() => {
   const _shift = (n, precision) => {
-    const [d, e] = ('' + n).split('e');
+    const [d, e] = String(n).split('e');
     return +(d + 'e' + (e ? +e + precision : precision));
   };
 
@@ -29,9 +29,7 @@ const $number = (record, groupCode, defaultValue) => {
   const rounded = Math.round(value);
   return Math.abs(rounded - value) < 1e-8 ? rounded : value;
 };
-const $numbers = (record, ...groupCodes) => groupCodes.map(groupCode => $number(record, groupCode));
-const $negates = (record, ...groupCodes) => groupCodes.map(groupCode => -$number(record, groupCode));
-const translate = (x, y) => x || y ? `translate(${x},${y})` : '';
+const translate = (x, y) => x || y ? `translate(${x || 0},${y || 0})` : '';
 const rotate = (angle, x, y) => !angle || Math.abs(angle) < 0.01 ? '' : x || y ? `rotate(${angle},${x || 0},${y || 0})` : `rotate(${angle})`;
 const transforms = (...s) => s.filter(Boolean).join(' ');
 const resolveStrokeDasharray = lengths => {
@@ -49,6 +47,7 @@ class Context {
     this.dxf = dxf;
     this.resolveColorIndex = options.resolveColorIndex;
     this.resolveLineWeight = options.resolveLineWeight;
+    this.$LUPREC = +getGroupCodeValue(dxf.HEADER?.$LUPREC, 70) || 4;
 
     for (const layer of dxf.TABLES?.LAYER ?? []) {
       if (getGroupCodeValue(layer, 0) !== 'LAYER') {
@@ -127,6 +126,10 @@ class Context {
 
   strokeDasharray(entity) {
     return this.ltype(entity)?.strokeDasharray;
+  }
+
+  roundCoordinate(n) {
+    return n === undefined ? NaN : round$1(n, this.$LUPREC);
   }
 
 }
@@ -599,7 +602,7 @@ const MTEXT_contents = (contents, options, i = 0) => {
 const defaultOptions = {
   warn: console.debug,
   resolveColorIndex: colorIndex => DXF_COLOR_HEX[colorIndex] ?? '#888',
-  resolveLineWeight: lineWeight => lineWeight === -3 ? 0.5 : lineWeight * 10
+  resolveLineWeight: lineWeight => lineWeight === -3 ? 0.5 : round$1(lineWeight * 10, 6)
 };
 
 const commonAttributes = entity => ({
@@ -660,6 +663,10 @@ const createEntitySvgMap = (dxf, options) => {
   } = options;
   const context = new Context(dxf, options);
 
+  const roundCoordinate = n => context.roundCoordinate(n);
+
+  const $roundCoordinate = (entity, groupCode) => roundCoordinate(getGroupCodeValue(entity, groupCode));
+
   const lineAttributes = entity => Object.assign(commonAttributes(entity), {
     stroke: context.color(entity),
     'stroke-width': context.strokeWidth(entity),
@@ -670,18 +677,20 @@ const createEntitySvgMap = (dxf, options) => {
   const entitySvgMap = {
     POINT: () => undefined,
     LINE: entity => {
-      const xs = $numbers(entity, 10, 11);
-      const ys = $negates(entity, 20, 21);
+      const x1 = $roundCoordinate(entity, 10);
+      const x2 = $roundCoordinate(entity, 11);
+      const y1 = -$roundCoordinate(entity, 20);
+      const y2 = -$roundCoordinate(entity, 21);
       return [jsx("line", { ...lineAttributes(entity),
-        x1: xs[0],
-        y1: ys[0],
-        x2: xs[1],
-        y2: ys[1]
-      }), xs, ys];
+        x1: x1,
+        y1: y1,
+        x2: x2,
+        y2: y2
+      }), [x1, x2], [y1, y2]];
     },
     POLYLINE: (entity, vertices) => {
-      const xs = vertices.map(v => $number(v, 10));
-      const ys = vertices.map(v => -$number(v, 20));
+      const xs = vertices.map(v => $roundCoordinate(v, 10));
+      const ys = vertices.map(v => -$roundCoordinate(v, 20));
       const flags = +(getGroupCodeValue(entity, 70) ?? 0);
       const attrs = Object.assign(lineAttributes(entity), {
         points: polylinePoints(xs, ys)
@@ -691,8 +700,8 @@ const createEntitySvgMap = (dxf, options) => {
       }), xs, ys];
     },
     LWPOLYLINE: entity => {
-      const xs = getGroupCodeValues(entity, 10).map(s => +s);
-      const ys = getGroupCodeValues(entity, 20).map(s => -s);
+      const xs = getGroupCodeValues(entity, 10).map(s => roundCoordinate(s));
+      const ys = getGroupCodeValues(entity, 20).map(s => -roundCoordinate(s));
       const flags = +(getGroupCodeValue(entity, 70) ?? 0);
       const attrs = Object.assign(lineAttributes(entity), {
         points: polylinePoints(xs, ys)
@@ -702,15 +711,19 @@ const createEntitySvgMap = (dxf, options) => {
       }), xs, ys];
     },
     CIRCLE: entity => {
-      const [cx, cy, r] = $numbers(entity, 10, 20, 40);
+      const cx = $roundCoordinate(entity, 10);
+      const cy = -$roundCoordinate(entity, 20);
+      const r = $roundCoordinate(entity, 40);
       return [jsx("circle", { ...lineAttributes(entity),
         cx: cx,
-        cy: -cy,
+        cy: cy,
         r: r
-      }), [cx - r, cx + r], [-cy - r, -cy + r]];
+      }), [cx - r, cx + r], [cy - r, cy + r]];
     },
     ARC: entity => {
-      const [cx, cy, r] = $numbers(entity, 10, 20, 40);
+      const cx = $roundCoordinate(entity, 10);
+      const cy = $roundCoordinate(entity, 20);
+      const r = $roundCoordinate(entity, 40);
       const deg1 = $number(entity, 50, 0);
       const deg2 = $number(entity, 51, 0);
       const rad1 = deg1 * Math.PI / 180;
@@ -730,25 +743,28 @@ const createEntitySvgMap = (dxf, options) => {
       const rad2 = $number(entity, 42, 2 * Math.PI);
 
       if (nearlyEqual(rad1, 0) && nearlyEqual(rad2, 2 * Math.PI)) {
-        const [cx, cy, majorX, majorY] = $numbers(entity, 10, 20, 11, 21);
+        const cx = $roundCoordinate(entity, 10);
+        const cy = -$roundCoordinate(entity, 20);
+        const majorX = $roundCoordinate(entity, 11);
+        const majorY = $roundCoordinate(entity, 21);
         const majorR = Math.hypot(majorX, majorY);
         const minorR = $number(entity, 40) * majorR;
         const radAngleOffset = -Math.atan2(majorY, majorX);
-        const transform = rotate(radAngleOffset * 180 / Math.PI, cx, -cy);
+        const transform = rotate(radAngleOffset * 180 / Math.PI, cx, cy);
         return [jsx("ellipse", { ...lineAttributes(entity),
           cx: cx,
-          cy: -cy,
+          cy: cy,
           rx: majorR,
           ry: minorR,
           transform: transform
-        }), [cx - majorR, cx + majorR], [-cy - minorR, -cy + minorR]];
+        }), [cx - majorR, cx + majorR], [cy - minorR, cy + minorR]];
       } else {
         warn('Elliptical arc cannot be rendered yet.');
       }
     },
     LEADER: entity => {
-      const xs = getGroupCodeValues(entity, 10).map(s => +s);
-      const ys = getGroupCodeValues(entity, 20).map(s => -s);
+      const xs = getGroupCodeValues(entity, 10).map(s => roundCoordinate(s));
+      const ys = getGroupCodeValues(entity, 20).map(s => -roundCoordinate(s));
       return [jsx("polyline", { ...commonAttributes(entity),
         points: polylinePoints(xs, ys),
         stroke: context.color(entity),
@@ -778,8 +794,14 @@ const createEntitySvgMap = (dxf, options) => {
       }), paths.flatMap(path => path[10]), paths.flatMap(path => -path[20])];
     },
     SOLID: entity => {
-      const [x1, x2, x3, x4] = $numbers(entity, 10, 11, 12, 13);
-      const [y1, y2, y3, y4] = $negates(entity, 20, 21, 22, 23);
+      const x1 = $roundCoordinate(entity, 10);
+      const x2 = $roundCoordinate(entity, 11);
+      const x3 = $roundCoordinate(entity, 12);
+      const x4 = $roundCoordinate(entity, 13);
+      const y1 = -$roundCoordinate(entity, 20);
+      const y2 = -$roundCoordinate(entity, 21);
+      const y3 = -$roundCoordinate(entity, 22);
+      const y4 = -$roundCoordinate(entity, 23);
       const d = `M${x1} ${y1}L${x2} ${y2}L${x3} ${y3}${x3 !== x4 || y3 !== y4 ? `L${x4} ${y4}` : ''}Z`;
       return [jsx("path", { ...commonAttributes(entity),
         d: d,
@@ -787,8 +809,10 @@ const createEntitySvgMap = (dxf, options) => {
       }), [x1, x2, x3, x4], [y1, y2, y3, y4]];
     },
     TEXT: entity => {
-      const [x, h] = $numbers(entity, 10, 40);
-      const [y, angle] = $negates(entity, 20, 50);
+      const x = $roundCoordinate(entity, 10);
+      const y = -$roundCoordinate(entity, 20);
+      const h = $roundCoordinate(entity, 40);
+      const angle = -$number(entity, 50);
       const contents = parseDxfTextContent(getGroupCodeValue(entity, 1) || '', options);
       return [jsx("text", { ...commonAttributes(entity),
         x: x,
@@ -806,8 +830,9 @@ const createEntitySvgMap = (dxf, options) => {
       }), [x, x + h * contents.length], [y, y + h]];
     },
     MTEXT: entity => {
-      const [x, h] = $numbers(entity, 10, 40);
-      const y = -$number(entity, 20);
+      const x = $roundCoordinate(entity, 10);
+      const y = -$roundCoordinate(entity, 20);
+      const h = $roundCoordinate(entity, 40);
       const angle = MTEXT_angle(entity);
       const {
         dominantBaseline,
@@ -832,8 +857,10 @@ const createEntitySvgMap = (dxf, options) => {
       let dominantBaseline = 'text-after-edge';
       let textAnchor = 'middle';
       let angle;
-      const tx = $number(entity, 11);
-      const ty = -$number(entity, 21);
+      const tx = $roundCoordinate(entity, 11);
+      const ty = -$roundCoordinate(entity, 21);
+      const x0 = $roundCoordinate(entity, 10);
+      const y0 = -$roundCoordinate(entity, 20);
       const xs = [tx];
       const ys = [ty];
       const dimensionType = $number(entity, 70, 0);
@@ -844,27 +871,29 @@ const createEntitySvgMap = (dxf, options) => {
         case 1:
           {
             // Aligned
-            const [x0, x1, x2] = $numbers(entity, 10, 13, 14);
-            const [y0, y1, y2] = $negates(entity, 20, 23, 24);
+            const x3 = $roundCoordinate(entity, 13);
+            const x4 = $roundCoordinate(entity, 14);
+            const y3 = -$roundCoordinate(entity, 23);
+            const y4 = -$roundCoordinate(entity, 24);
             angle = Math.round(-$number(entity, 50, 0) || 0);
 
             if (angle % 180 === 0) {
-              measurement = Math.abs(x1 - x2);
+              measurement = Math.abs(x3 - x4);
               lineElements = jsx("path", {
                 stroke: "currentColor",
-                d: `M${x1} ${y1}L${x1} ${y0}L${x2} ${y0}L${x2} ${y2}`
+                d: `M${x3} ${y3}L${x3} ${y0}L${x4} ${y0}L${x4} ${y4}`
               });
               angle = 0;
             } else {
-              measurement = Math.abs(y1 - y2);
+              measurement = Math.abs(y3 - y4);
               lineElements = jsx("path", {
                 stroke: "currentColor",
-                d: `M${x1} ${y1}L${x0} ${y1}L${x0} ${y2}L${x2} ${y2}`
+                d: `M${x3} ${y3}L${x0} ${y3}L${x0} ${y4}L${x4} ${y4}`
               });
             }
 
-            xs.push(x1, x2);
-            ys.push(y1, y2);
+            xs.push(x3, x4);
+            ys.push(y3, y4);
             break;
           }
 
@@ -880,45 +909,45 @@ const createEntitySvgMap = (dxf, options) => {
         case 4:
           {
             // Radius
-            const [x0, x1] = $numbers(entity, 10, 15);
-            const [y0, y1] = $negates(entity, 20, 25);
-            measurement = Math.hypot(x0 - x1, y0 - y1);
+            const x5 = $roundCoordinate(entity, 15);
+            const y5 = -$roundCoordinate(entity, 25);
+            measurement = Math.hypot(x0 - x5, y0 - y5);
             lineElements = jsx("path", {
               stroke: "currentColor",
-              d: `M${x1} ${y1}L${tx} ${ty}`
+              d: `M${x5} ${y5}L${tx} ${ty}`
             });
-            xs.push(x0, x1);
-            ys.push(y0, y1);
+            xs.push(x0, x5);
+            ys.push(y0, y5);
             break;
           }
 
         case 6:
           {
             // Ordinate
-            const [x1, x2] = $numbers(entity, 13, 14);
-            const [y1, y2] = $negates(entity, 23, 24);
+            const x3 = $roundCoordinate(entity, 13);
+            const x4 = $roundCoordinate(entity, 14);
+            const y3 = -$roundCoordinate(entity, 23);
+            const y4 = -$roundCoordinate(entity, 24);
 
             if (dimensionType & 64) {
-              const x0 = $number(entity, 10);
-              measurement = Math.abs(x0 - +x1);
+              measurement = Math.abs(x0 - +x3);
               lineElements = jsx("path", {
                 stroke: "currentColor",
-                d: `M${x1} ${y1}L${x1} ${y2}L${x2} ${y2}L${tx} ${ty}`
+                d: `M${x3} ${y3}L${x3} ${y4}L${x4} ${y4}L${tx} ${ty}`
               });
               angle = -90;
             } else {
-              const y0 = -$number(entity, 20);
-              measurement = Math.abs(y0 - +y1);
+              measurement = Math.abs(y0 - +y3);
               lineElements = jsx("path", {
                 stroke: "currentColor",
-                d: `M${x1} ${y1}L${x2} ${y1}L${x2} ${y2}L${tx} ${ty}`
+                d: `M${x3} ${y3}L${x4} ${y3}L${x4} ${y4}L${tx} ${ty}`
               });
             }
 
             dominantBaseline = 'central';
             textAnchor = 'middle';
-            xs.push(x1, x2);
-            ys.push(y1, y2);
+            xs.push(x3, x4);
+            ys.push(y3, y4);
             break;
           }
 
@@ -1018,8 +1047,8 @@ const createEntitySvgMap = (dxf, options) => {
         y2: ys[ys.length - 1],
         stroke: lineColor
       });
-      const x = $number(entity, 10);
-      const y = -$number(entity, 20);
+      const x = $roundCoordinate(entity, 10);
+      const y = -$roundCoordinate(entity, 20);
       return [jsx("g", { ...commonAttributes(entity),
         "font-size": $trim(entity, 140),
         "dominant-baseline": "text-before-edge",
@@ -1028,8 +1057,8 @@ const createEntitySvgMap = (dxf, options) => {
       }), xs.map(_x => _x + x), ys.map(_y => _y + y)];
     },
     INSERT: entity => {
-      const x = $number(entity, 10, 0);
-      const y = -$number(entity, 20, 0);
+      const x = $roundCoordinate(entity, 10);
+      const y = -$roundCoordinate(entity, 20);
       const angle = -$number(entity, 50);
       const xscale = $number(entity, 41, 1) || 1;
       const yscale = $number(entity, 42, 1) || 1;
