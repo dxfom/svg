@@ -27,3 +27,15 @@ export const $numbers = (record: DxfRecordReadonly, ...groupCodes: readonly numb
   groupCodes.map(groupCode => $number(record, groupCode))
 export const $negates = (record: DxfRecordReadonly, ...groupCodes: readonly number[]) =>
   groupCodes.map(groupCode => -$number(record, groupCode))
+
+export const translate = (x?: number, y?: number) => (x || y ? `translate(${x},${y})` : '')
+export const rotate = (angle?: number, x?: number, y?: number) =>
+  !angle || Math.abs(angle) < 0.01 ? '' : x || y ? `rotate(${angle},${x || 0},${y || 0})` : `rotate(${angle})`
+export const transforms = (...s: readonly string[]) => s.filter(Boolean).join(' ')
+
+export const resolveStrokeDasharray = (lengths: readonly number[]) => {
+  const dasharray = lengths.map(Math.abs)
+  lengths[0] < 0 && dasharray.unshift(0)
+  dasharray.length % 2 === 1 && dasharray.push(0)
+  return dasharray
+}

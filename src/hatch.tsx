@@ -1,5 +1,6 @@
 import { DxfRecordReadonly, getGroupCodeValue as $, getGroupCodeValues as $$ } from '@dxfom/dxf'
-import { $number, $trim, round as _round } from './util'
+import { Context } from './Context'
+import { $number, $trim, resolveStrokeDasharray, rotate, round as _round, transforms, translate } from './util'
 
 const round = (n: number | string) => _round(n, 6)
 
@@ -75,7 +76,7 @@ const hatchGradientDefs: Record<string, (id: string, colors: readonly [string, s
   LINEAR: (id, colors, hatch) => {
     const angle = round(($number(hatch, 460) * 180) / Math.PI)
     return (
-      <linearGradient id={id} x2="1" y2="0" gradientTransform={angle ? `rotate(${-angle},.5,.5)` : ''}>
+      <linearGradient id={id} x2="1" y2="0" gradientTransform={rotate(-angle, 0.5, 0.5)}>
         <stop stop-color={colors[0]} />
         <stop stop-color={colors[1]} offset="1" />
       </linearGradient>
@@ -84,7 +85,7 @@ const hatchGradientDefs: Record<string, (id: string, colors: readonly [string, s
   CYLINDER: (id, colors, hatch) => {
     const angle = round(($number(hatch, 460) * 180) / Math.PI)
     return (
-      <linearGradient id={id} x2="1" y2="0" gradientTransform={angle ? `rotate(${-angle},.5,.5)` : ''}>
+      <linearGradient id={id} x2="1" y2="0" gradientTransform={rotate(-angle, 0.5, 0.5)}>
         <stop stop-color={colors[0]} />
         <stop stop-color={colors[1]} offset=".5" />
         <stop stop-color={colors[0]} offset="1" />
@@ -130,17 +131,13 @@ const hatchGradientDefs: Record<string, (id: string, colors: readonly [string, s
   INVCURVED: (id, colors, hatch) => hatchGradientDefs.CURVED(id, [colors[1], colors[0]], hatch),
 }
 
-export const hatchFill = (
-  hatch: DxfRecordReadonly,
-  color: (entity: DxfRecordReadonly) => string,
-  resolveColorIndex: (colorIndex: number) => string,
-): [string, string] => {
-  const fillColor = color(hatch)
+export const hatchFill = (hatch: DxfRecordReadonly, context: Context): [string, string] => {
+  const fillColor = context.color(hatch)
   if ($trim(hatch, 450) === '1') {
     // gradient
     const id = `hatch-gradient-${$(hatch, 5)}`
     const colorIndices = $$(hatch, 63)
-    const colors = [resolveColorIndex(+colorIndices[0] || 5), resolveColorIndex(+colorIndices[1] || 2)] as const
+    const colors = [context.resolveColorIndex(+colorIndices[0] || 5), context.resolveColorIndex(+colorIndices[1] || 2)] as const
     const gradientPatternName = $trim(hatch, 470)
     const defs = gradientPatternName && hatchGradientDefs[gradientPatternName]?.(id, colors, hatch)
     return defs ? [`url(#${id})`, `<defs>${defs}</defs>`] : [fillColor, '']
@@ -157,29 +154,26 @@ export const hatchFill = (
     const id = `hatch-pattern-${handle}`
     const bgGroupCodeIndex = hatch.findIndex(([groupCode, value]) => groupCode === 1001 && value === 'HATCHBACKGROUNDCOLOR')
     const bgColorIndex = bgGroupCodeIndex !== -1 && +hatch[bgGroupCodeIndex + 1][1] & 255
-    const bgColor = bgColorIndex && resolveColorIndex(bgColorIndex)
+    const bgColor = bgColorIndex && context.resolveColorIndex(bgColorIndex)
     return [
       `url(#${id})`,
       <defs>
-        {patternElements
-          .map(({ 53: angle, 43: xBase, 44: yBase, 45: xOffset, 46: yOffset, 49: dasharray }, i) => {
-            dasharray[0] < 0 && dasharray.unshift(0)
-            dasharray.length % 2 === 1 && dasharray.push(0)
-            dasharray = dasharray.map(Math.abs)
-            const height = round(Math.hypot(xOffset, yOffset))
-            const width = round(dasharray.reduce((x, y) => x + y, 0)) || 256
-            const transform =
-              (xBase || yBase ? `translate(${xBase},${-yBase})${angle ? ' ' : ''}` : '') + (angle ? `rotate(${-angle})` : '')
-            return (
-              <pattern id={`${id}-${i}`} width={width} height={height} patternUnits="userSpaceOnUse" patternTransform={transform}>
-                <line x2={width} stroke-width="1" stroke={fillColor} stroke-dasharray={dasharray.join(' ')} />
-              </pattern>
-            )
-          })
-          .join('')}
+        {patternElements.map(({ 53: angle, 43: xBase, 44: yBase, 45: xOffset, 46: yOffset, 49: strokeDasharray }, i) => {
+          strokeDasharray = resolveStrokeDasharray(strokeDasharray)
+          const height = round(Math.hypot(xOffset, yOffset))
+          const width = round(strokeDasharray.reduce((x, y) => x + y, 0)) || 256
+          const transform = transforms(translate(xBase, -yBase), rotate(-angle))
+          return (
+            <pattern id={`${id}-${i}`} width={width} height={height} patternUnits="userSpaceOnUse" patternTransform={transform}>
+              <line x2={width} stroke-width="1" stroke={fillColor} stroke-dasharray={strokeDasharray.join(' ')} />
+            </pattern>
+          )
+        })}
         <pattern id={id} width={256} height={256} patternUnits="userSpaceOnUse">
-          {(bgColor ? <rect fill={bgColor} width={256} height={256} /> : '') +
-            patternElements.map((_, i) => <rect fill={`url(#hatch-pattern-${handle}-${i})`} width={256} height={256} />).join('')}
+          {bgColor ? <rect fill={bgColor} width={256} height={256} /> : ''}
+          {patternElements.map((_, i) => (
+            <rect fill={`url(#hatch-pattern-${handle}-${i})`} width={256} height={256} />
+          ))}
         </pattern>
       </defs>,
     ]

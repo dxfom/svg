@@ -31,6 +31,105 @@ const $number = (record, groupCode, defaultValue) => {
 };
 const $numbers = (record, ...groupCodes) => groupCodes.map(groupCode => $number(record, groupCode));
 const $negates = (record, ...groupCodes) => groupCodes.map(groupCode => -$number(record, groupCode));
+const translate = (x, y) => x || y ? `translate(${x},${y})` : '';
+const rotate = (angle, x, y) => !angle || Math.abs(angle) < 0.01 ? '' : x || y ? `rotate(${angle},${x || 0},${y || 0})` : `rotate(${angle})`;
+const transforms = (...s) => s.filter(Boolean).join(' ');
+const resolveStrokeDasharray = lengths => {
+  const dasharray = lengths.map(Math.abs);
+  lengths[0] < 0 && dasharray.unshift(0);
+  dasharray.length % 2 === 1 && dasharray.push(0);
+  return dasharray;
+};
+
+class Context {
+  layerMap = new Map();
+  ltypeMap = new Map();
+
+  constructor(dxf, options) {
+    this.dxf = dxf;
+    this.resolveColorIndex = options.resolveColorIndex;
+    this.resolveLineWeight = options.resolveLineWeight;
+
+    for (const layer of dxf.TABLES?.LAYER ?? []) {
+      if (getGroupCodeValue(layer, 0) !== 'LAYER') {
+        continue;
+      }
+
+      const strokeWidth = $number(layer, 370);
+      this.layerMap.set(getGroupCodeValue(layer, 2), {
+        color: options.resolveColorIndex(+getGroupCodeValue(layer, 62)),
+        ltype: getGroupCodeValue(layer, 6),
+        strokeWidth: isNaN(strokeWidth) ? undefined : strokeWidth
+      });
+    }
+
+    for (const ltype of dxf.TABLES?.LTYPE ?? []) {
+      if (getGroupCodeValue(ltype, 0) === 'LTYPE') {
+        continue;
+      }
+
+      const strokeDasharray = resolveStrokeDasharray(getGroupCodeValues(ltype, 49).map(s => round$1(s, 8)));
+      strokeDasharray.length !== 0 && this.ltypeMap.set(getGroupCodeValue(ltype, 2), {
+        strokeDasharray: strokeDasharray.join(' ')
+      });
+    }
+  }
+
+  layer(entity) {
+    const layerId = $trim(entity, 8);
+    return layerId ? this.layerMap.get(layerId) : undefined;
+  }
+
+  ltype(entity) {
+    const ltypeId = $trim(entity, 8) ?? this.layer(entity)?.ltype;
+    return ltypeId ? this.ltypeMap.get(ltypeId) : undefined;
+  }
+
+  _color(entity) {
+    const colorIndex = $trim(entity, 62);
+
+    if (colorIndex === '0') {
+      return 'currentColor';
+    }
+
+    if (colorIndex && colorIndex !== '256') {
+      return this.resolveColorIndex(+colorIndex);
+    }
+
+    const layer = this.layer(entity);
+
+    if (layer) {
+      return layer.color;
+    }
+  }
+
+  color(entity) {
+    return this._color(entity) || 'currentColor';
+  }
+
+  strokeWidth(entity) {
+    const value = $trim(entity, 370);
+
+    switch (value) {
+      case '-3':
+        return this.resolveLineWeight(-3);
+
+      case '-2':
+        return this.resolveLineWeight(this.layer(entity)?.strokeWidth ?? -3);
+
+      case '-1':
+        return;
+
+      default:
+        return this.resolveLineWeight(+value / 100);
+    }
+  }
+
+  strokeDasharray(entity) {
+    return this.ltype(entity)?.strokeDasharray;
+  }
+
+}
 
 const DimStyles = {
   DIMSCALE: [40, 40, 1],
@@ -132,7 +231,7 @@ const jsx = (type, props) => {
   }
 
   if (children) {
-    s += `>${Array.isArray(children) ? children.join('') : children}</${type}>`;
+    s += `>${Array.isArray(children) ? children.flat(Infinity).join('') : children}</${type}>`;
   } else {
     s += '/>';
   }
@@ -229,7 +328,7 @@ const hatchGradientDefs = {
       id: id,
       x2: "1",
       y2: "0",
-      gradientTransform: angle ? `rotate(${-angle},.5,.5)` : '',
+      gradientTransform: rotate(-angle, 0.5, 0.5),
       children: [jsx("stop", {
         "stop-color": colors[0]
       }), jsx("stop", {
@@ -244,7 +343,7 @@ const hatchGradientDefs = {
       id: id,
       x2: "1",
       y2: "0",
-      gradientTransform: angle ? `rotate(${-angle},.5,.5)` : '',
+      gradientTransform: rotate(-angle, 0.5, 0.5),
       children: [jsx("stop", {
         "stop-color": colors[0]
       }), jsx("stop", {
@@ -309,14 +408,14 @@ const hatchGradientDefs = {
   }),
   INVCURVED: (id, colors, hatch) => hatchGradientDefs.CURVED(id, [colors[1], colors[0]], hatch)
 };
-const hatchFill = (hatch, color, resolveColorIndex) => {
-  const fillColor = color(hatch);
+const hatchFill = (hatch, context) => {
+  const fillColor = context.color(hatch);
 
   if ($trim(hatch, 450) === '1') {
     // gradient
     const id = `hatch-gradient-${getGroupCodeValue(hatch, 5)}`;
     const colorIndices = getGroupCodeValues(hatch, 63);
-    const colors = [resolveColorIndex(+colorIndices[0] || 5), resolveColorIndex(+colorIndices[1] || 2)];
+    const colors = [context.resolveColorIndex(+colorIndices[0] || 5), context.resolveColorIndex(+colorIndices[1] || 2)];
     const gradientPatternName = $trim(hatch, 470);
     const defs = gradientPatternName && hatchGradientDefs[gradientPatternName]?.(id, colors, hatch);
     return defs ? [`url(#${id})`, `<defs>${defs}</defs>`] : [fillColor, ''];
@@ -335,7 +434,7 @@ const hatchFill = (hatch, color, resolveColorIndex) => {
     const id = `hatch-pattern-${handle}`;
     const bgGroupCodeIndex = hatch.findIndex(([groupCode, value]) => groupCode === 1001 && value === 'HATCHBACKGROUNDCOLOR');
     const bgColorIndex = bgGroupCodeIndex !== -1 && +hatch[bgGroupCodeIndex + 1][1] & 255;
-    const bgColor = bgColorIndex && resolveColorIndex(bgColorIndex);
+    const bgColor = bgColorIndex && context.resolveColorIndex(bgColorIndex);
     return [`url(#${id})`, jsxs("defs", {
       children: [patternElements.map(({
         53: angle,
@@ -343,14 +442,12 @@ const hatchFill = (hatch, color, resolveColorIndex) => {
         44: yBase,
         45: xOffset,
         46: yOffset,
-        49: dasharray
+        49: strokeDasharray
       }, i) => {
-        dasharray[0] < 0 && dasharray.unshift(0);
-        dasharray.length % 2 === 1 && dasharray.push(0);
-        dasharray = dasharray.map(Math.abs);
+        strokeDasharray = resolveStrokeDasharray(strokeDasharray);
         const height = round(Math.hypot(xOffset, yOffset));
-        const width = round(dasharray.reduce((x, y) => x + y, 0)) || 256;
-        const transform = (xBase || yBase ? `translate(${xBase},${-yBase})${angle ? ' ' : ''}` : '') + (angle ? `rotate(${-angle})` : '');
+        const width = round(strokeDasharray.reduce((x, y) => x + y, 0)) || 256;
+        const transform = transforms(translate(xBase, -yBase), rotate(-angle));
         return jsx("pattern", {
           id: `${id}-${i}`,
           width: width,
@@ -361,23 +458,23 @@ const hatchFill = (hatch, color, resolveColorIndex) => {
             x2: width,
             "stroke-width": "1",
             stroke: fillColor,
-            "stroke-dasharray": dasharray.join(' ')
+            "stroke-dasharray": strokeDasharray.join(' ')
           })
         });
-      }).join(''), jsx("pattern", {
+      }), jsxs("pattern", {
         id: id,
         width: 256,
         height: 256,
         patternUnits: "userSpaceOnUse",
-        children: (bgColor ? jsx("rect", {
+        children: [bgColor ? jsx("rect", {
           fill: bgColor,
           width: 256,
           height: 256
-        }) : '') + patternElements.map((_, i) => jsx("rect", {
+        }) : '', patternElements.map((_, i) => jsx("rect", {
           fill: `url(#hatch-pattern-${handle}-${i})`,
           width: 256,
           height: 256
-        })).join('')
+        }))]
       })]
     })];
   }
@@ -516,7 +613,22 @@ const normalizeVector3 = ([x, y, z]) => {
 
 const crossProduct = ([a1, a2, a3], [b1, b2, b3]) => [a2 * b3 - a3 * b2, a3 * b1 - a1 * b3, a1 * b2 - a2 * b1];
 
-const textDecorations = ({
+const extrusionStyle = entity => {
+  const extrusionX = -$number(entity, 210, 0);
+  const extrusionY = $number(entity, 220, 0);
+  const extrusionZ = $number(entity, 230, 1);
+
+  if (Math.abs(extrusionX) < 1 / 64 && Math.abs(extrusionY) < 1 / 64) {
+    return extrusionZ < 0 ? 'transform:rotateY(180deg)' : undefined;
+  }
+
+  const az = normalizeVector3([extrusionX, extrusionY, extrusionZ]);
+  const ax = normalizeVector3(crossProduct([0, 0, 1], az));
+  const ay = normalizeVector3(crossProduct(az, ax));
+  return `transform:matrix3d(${ax},0,${ay},0,0,0,0,0,0,0,0,1)`;
+};
+
+const TEXT_textDecorations = ({
   k,
   o,
   u
@@ -544,98 +656,18 @@ const polylinePoints = (xs, ys) => {
 const createEntitySvgMap = (dxf, options) => {
   const {
     warn,
-    resolveColorIndex,
-    resolveLineWeight
+    resolveColorIndex
   } = options;
-  const layerMap = {};
-
-  for (const layer of dxf.TABLES?.LAYER ?? []) {
-    if (getGroupCodeValue(layer, 0) === 'LAYER') {
-      const strokeWidth = $number(layer, 370);
-      layerMap[getGroupCodeValue(layer, 2)] = {
-        color: resolveColorIndex(+getGroupCodeValue(layer, 62)),
-        ltype: getGroupCodeValue(layer, 6),
-        strokeWidth: isNaN(strokeWidth) ? undefined : strokeWidth
-      };
-    }
-  }
-
-  const ltypeMap = {};
-
-  for (const ltype of dxf.TABLES?.LTYPE ?? []) {
-    if (getGroupCodeValue(ltype, 0) === 'LTYPE') {
-      const _strokeDasharray = getGroupCodeValues(ltype, 49).map(trim).map(s => s.startsWith('-') ? s.slice(1) : s);
-
-      const strokeDasharray = _strokeDasharray.length === 0 || _strokeDasharray.length % 2 === 1 ? _strokeDasharray : _strokeDasharray[0] === '0' ? _strokeDasharray.slice(1) : _strokeDasharray.concat('0');
-      strokeDasharray.length !== 0 && (ltypeMap[getGroupCodeValue(ltype, 2)] = {
-        strokeDasharray: strokeDasharray.join(' ')
-      });
-    }
-  }
-
-  const _color = entity => {
-    const colorIndex = $trim(entity, 62);
-
-    if (colorIndex === '0') {
-      return 'currentColor';
-    }
-
-    if (colorIndex && colorIndex !== '256') {
-      return resolveColorIndex(+colorIndex);
-    }
-
-    const layer = layerMap[$trim(entity, 8)];
-
-    if (layer) {
-      return layer.color;
-    }
-  };
-
-  const color = entity => _color(entity) || 'currentColor';
-
-  const strokeDasharray = entity => ltypeMap[getGroupCodeValue(entity, 6) ?? layerMap[getGroupCodeValue(entity, 8)]?.ltype]?.strokeDasharray;
-
-  const strokeWidth = entity => {
-    const value = $trim(entity, 370);
-
-    switch (value) {
-      case '-3':
-        return resolveLineWeight(-3);
-
-      case '-2':
-        return resolveLineWeight(layerMap[getGroupCodeValue(entity, 8)]?.strokeWidth ?? -3);
-
-      case '-1':
-        return;
-
-      default:
-        return resolveLineWeight(+value / 100);
-    }
-  };
-
-  const extrusionStyle = entity => {
-    const extrusionX = -$number(entity, 210, 0);
-    const extrusionY = $number(entity, 220, 0);
-    const extrusionZ = $number(entity, 230, 1);
-
-    if (Math.abs(extrusionX) < 1 / 64 && Math.abs(extrusionY) < 1 / 64) {
-      return extrusionZ < 0 ? 'transform:rotateY(180deg)' : undefined;
-    }
-
-    const az = normalizeVector3([extrusionX, extrusionY, extrusionZ]);
-    const ax = normalizeVector3(crossProduct([0, 0, 1], az));
-    const ay = normalizeVector3(crossProduct(az, ax));
-    return `transform:matrix3d(${ax},0,${ay},0,0,0,0,0,0,0,0,1)`;
-  };
+  const context = new Context(dxf, options);
 
   const lineAttributes = entity => Object.assign(commonAttributes(entity), {
-    stroke: color(entity),
-    'stroke-width': strokeWidth(entity),
-    'stroke-dasharray': strokeDasharray(entity),
+    stroke: context.color(entity),
+    'stroke-width': context.strokeWidth(entity),
+    'stroke-dasharray': context.strokeDasharray(entity),
     style: extrusionStyle(entity)
   });
 
-  return {
+  const entitySvgMap = {
     POINT: () => undefined,
     LINE: entity => {
       const xs = $numbers(entity, 10, 11);
@@ -702,7 +734,7 @@ const createEntitySvgMap = (dxf, options) => {
         const majorR = Math.hypot(majorX, majorY);
         const minorR = $number(entity, 40) * majorR;
         const radAngleOffset = -Math.atan2(majorY, majorX);
-        const transform = radAngleOffset ? `rotate(${radAngleOffset * 180 / Math.PI} ${cx} ${-cy})` : undefined;
+        const transform = rotate(radAngleOffset * 180 / Math.PI, cx, -cy);
         return [jsx("ellipse", { ...lineAttributes(entity),
           cx: cx,
           cy: -cy,
@@ -719,8 +751,8 @@ const createEntitySvgMap = (dxf, options) => {
       const ys = getGroupCodeValues(entity, 20).map(s => -s);
       return [jsx("polyline", { ...commonAttributes(entity),
         points: polylinePoints(xs, ys),
-        stroke: color(entity),
-        "stroke-dasharray": strokeDasharray(entity)
+        stroke: context.color(entity),
+        "stroke-dasharray": context.strokeDasharray(entity)
       }), xs, ys];
     },
     HATCH: entity => {
@@ -739,7 +771,7 @@ const createEntitySvgMap = (dxf, options) => {
       }
 
       d += 'Z';
-      const [fill, defs] = hatchFill(entity, color, resolveColorIndex);
+      const [fill, defs] = hatchFill(entity, context);
       return [defs + jsx("path", { ...commonAttributes(entity),
         d: d,
         fill: fill
@@ -751,7 +783,7 @@ const createEntitySvgMap = (dxf, options) => {
       const d = `M${x1} ${y1}L${x2} ${y2}L${x3} ${y3}${x3 !== x4 || y3 !== y4 ? `L${x4} ${y4}` : ''}Z`;
       return [jsx("path", { ...commonAttributes(entity),
         d: d,
-        fill: color(entity)
+        fill: context.color(entity)
       }), [x1, x2, x3, x4], [y1, y2, y3, y4]];
     },
     TEXT: entity => {
@@ -761,14 +793,14 @@ const createEntitySvgMap = (dxf, options) => {
       return [jsx("text", { ...commonAttributes(entity),
         x: x,
         y: y,
-        fill: color(entity),
+        fill: context.color(entity),
         "font-size": h,
         "dominant-baseline": TEXT_dominantBaseline[$trim(entity, 73)],
         "text-anchor": TEXT_textAnchor[$trim(entity, 72)],
-        transform: angle ? `rotate(${angle} ${x} ${y})` : '',
-        "text-decoration": contents.length === 1 && textDecorations(contents[0]),
+        transform: rotate(angle, x, y),
+        "text-decoration": contents.length === 1 && TEXT_textDecorations(contents[0]),
         children: contents.length === 1 ? contents[0].text : contents.map(content => jsx("tspan", {
-          "text-decoration": textDecorations(content),
+          "text-decoration": TEXT_textDecorations(content),
           children: content.text
         }))
       }), [x, x + h * contents.length], [y, y + h]];
@@ -785,11 +817,11 @@ const createEntitySvgMap = (dxf, options) => {
       return [jsx("text", { ...commonAttributes(entity),
         x: x,
         y: y,
-        fill: color(entity),
+        fill: context.color(entity),
         "font-size": h,
         "dominant-baseline": dominantBaseline,
         "text-anchor": textAnchor,
-        transform: angle ? `rotate(${-angle} ${x} ${y})` : undefined,
+        transform: rotate(-angle, x, y),
         children: MTEXT_contents(parseDxfMTextContent(contents, options), options)
       }), [x, x + h * contents.length], [y, y + h]];
     },
@@ -903,18 +935,18 @@ const createEntitySvgMap = (dxf, options) => {
         textElement = jsx("text", {
           x: tx,
           y: ty,
-          fill: isNaN(textColor) ? color(entity) : textColor === 0 ? 'currentColor' : resolveColorIndex(textColor),
+          fill: isNaN(textColor) ? context.color(entity) : textColor === 0 ? 'currentColor' : resolveColorIndex(textColor),
           "font-size": h,
           "dominant-baseline": dominantBaseline,
           "text-anchor": textAnchor,
-          transform: angle ? `rotate(${angle} ${tx} ${ty})` : '',
+          transform: rotate(angle, tx, ty),
           children: MTEXT_contents(parseDxfMTextContent(mtext, options), options)
         });
       }
       return [jsx("g", { ...commonAttributes(entity),
-        color: color(entity),
-        "stroke-width": strokeWidth(entity),
-        "stroke-dasharray": strokeDasharray(entity),
+        color: context.color(entity),
+        "stroke-width": context.strokeWidth(entity),
+        "stroke-dasharray": context.strokeDasharray(entity),
         style: extrusionStyle(entity),
         children: lineElements + textElement
       }), xs, ys];
@@ -935,7 +967,7 @@ const createEntitySvgMap = (dxf, options) => {
       }
       const ys = getGroupCodeValues(entity, 141).map(s => +s).reduce((ys, size) => (ys.push(ys[ys.length - 1] + size), ys), [0]);
       const xs = getGroupCodeValues(entity, 142).map(s => +s).reduce((xs, size) => (xs.push(xs[xs.length - 1] + size), xs), [0]);
-      const lineColor = color(entity);
+      const lineColor = context.color(entity);
       const textColor = resolveColorIndex(+getGroupCodeValue(entity, 64));
       let s = ys.map(y => jsx("line", {
         stroke: lineColor,
@@ -991,38 +1023,38 @@ const createEntitySvgMap = (dxf, options) => {
       return [jsx("g", { ...commonAttributes(entity),
         "font-size": $trim(entity, 140),
         "dominant-baseline": "text-before-edge",
-        transform: `translate(${x},${y})`,
+        transform: translate(x, y),
         children: s
       }), xs.map(_x => _x + x), ys.map(_y => _y + y)];
     },
     INSERT: entity => {
       const x = $number(entity, 10, 0);
       const y = -$number(entity, 20, 0);
-      const rotate = -$number(entity, 50);
+      const angle = -$number(entity, 50);
       const xscale = $number(entity, 41, 1) || 1;
       const yscale = $number(entity, 42, 1) || 1;
-      const transform = [x || y ? `translate(${x},${y})` : '', xscale !== 1 || yscale !== 1 ? `scale(${xscale},${yscale})` : '', rotate ? `rotate(${rotate})` : ''].filter(Boolean).join(' ');
+      const transform = transforms(translate(x, y), xscale !== 1 || yscale !== 1 ? `scale(${xscale},${yscale})` : '', rotate(angle));
 
       const _block = dxf.BLOCKS?.[getGroupCodeValue(entity, 2)];
 
       const block = _block?.slice(getGroupCodeValue(_block[0], 0) === 'BLOCK' ? 1 : 0, getGroupCodeValue(_block[_block.length - 1], 0) === 'ENDBLK' ? -1 : undefined);
-      const [contents, bbox] = entitiesSvg(dxf, block, options);
+      const [contents, bbox] = entitiesSvg(block, entitySvgMap, options);
       return [jsx("g", { ...lineAttributes(entity),
-        color: _color(entity),
-        "stroke-width": strokeWidth(entity),
-        "stroke-dasharray": strokeDasharray(entity),
+        color: context._color(entity),
+        "stroke-width": context.strokeWidth(entity),
+        "stroke-dasharray": context.strokeDasharray(entity),
         transform: transform,
         children: contents
       }), [x + bbox.x * xscale, x + (bbox.x + bbox.w) * xscale], [y + bbox.y * yscale, y + (bbox.y + bbox.h) * yscale]];
     }
   };
+  return entitySvgMap;
 };
 
-const entitiesSvg = (dxf, entities, options) => {
+const entitiesSvg = (entities, entitySvgMap, options) => {
   const {
     warn
   } = options;
-  const entitySvgMap = createEntitySvgMap(dxf, options);
   let s = '';
   let minX = Infinity;
   let maxX = -Infinity;
@@ -1084,7 +1116,7 @@ const createSvgContents = (dxf, options) => {
   const resolvedOptions = options ? { ...defaultOptions,
     ...options
   } : defaultOptions;
-  return entitiesSvg(dxf, dxf.ENTITIES, resolvedOptions);
+  return entitiesSvg(dxf.ENTITIES, createEntitySvgMap(dxf, resolvedOptions), resolvedOptions);
 };
 
 const createSvgString = (dxf, options) => {

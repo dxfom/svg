@@ -23,7 +23,7 @@ export const jsx = (type: string, props: Record<string, unknown>) => {
     s += ' stroke="none" style="white-space:pre"'
   }
   if (children) {
-    s += `>${Array.isArray(children) ? children.join('') : children}</${type}>`
+    s += `>${Array.isArray(children) ? children.flat(Infinity).join('') : children}</${type}>`
   } else {
     s += '/>'
   }
