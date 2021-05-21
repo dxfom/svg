@@ -1,6 +1,6 @@
+import { parseDxfFileString } from '@dxfom/dxf'
 import fs from 'fs'
 import path from 'path'
-import { parseDxfFileString } from '@dxfom/dxf'
 import { createSvgString } from '..'
 
 if (!process.argv[2].endsWith('.dxf')) {

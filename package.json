@@ -38,5 +38,13 @@
     "@dxfom/dxf": "^0.0.2",
     "@dxfom/mtext": "^0.3.2",
     "@dxfom/text": "^0.2.0"
+  },
+  "prettier": {
+    "printWidth": 140,
+    "endOfLine": "lf",
+    "singleQuote": true,
+    "trailingComma": "all",
+    "semi": false,
+    "arrowParens": "avoid"
   }
 }

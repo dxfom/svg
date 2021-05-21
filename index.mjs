@@ -810,8 +810,8 @@ const createEntitySvgMap = (dxf, options) => {
         case 0: // Rotated, Horizontal, or Vertical
 
         case 1:
-          // Aligned
           {
+            // Aligned
             const [x0, x1, x2] = $numbers(entity, 10, 13, 14);
             const [y0, y1, y2] = $negates(entity, 20, 23, 24);
             angle = Math.round(-$number(entity, 50, 0) || 0);
@@ -846,8 +846,8 @@ const createEntitySvgMap = (dxf, options) => {
         case 3: // Diameter
 
         case 4:
-          // Radius
           {
+            // Radius
             const [x0, x1] = $numbers(entity, 10, 15);
             const [y0, y1] = $negates(entity, 20, 25);
             measurement = Math.hypot(x0 - x1, y0 - y1);
@@ -861,8 +861,8 @@ const createEntitySvgMap = (dxf, options) => {
           }
 
         case 6:
-          // Ordinate
           {
+            // Ordinate
             const [x1, x2] = $numbers(entity, 13, 14);
             const [y1, y2] = $negates(entity, 23, 24);
 

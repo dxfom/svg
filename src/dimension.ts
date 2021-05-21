@@ -1,5 +1,5 @@
-import { DxfReadonly, DxfRecordReadonly, getGroupCodeValue as $ } from "@dxfom/dxf";
-import { $number, round } from "./util";
+import { DxfReadonly, DxfRecordReadonly, getGroupCodeValue as $ } from '@dxfom/dxf'
+import { $number, round } from './util'
 
 const DimStyles = {
   DIMSCALE: [40, 40, 1],
@@ -44,7 +44,7 @@ export const collectDimensionStyles = (dxf: DxfReadonly, dimension: DxfRecordRea
   return styles
 }
 
-const toleranceString = (n: number) => n > 0 ? '+' + n : n < 0 ? String(n) : ' 0'
+const toleranceString = (n: number) => (n > 0 ? '+' + n : n < 0 ? String(n) : ' 0')
 
 export const dimensionValueToMText = (measurement: number, dimension: DxfRecordReadonly, styles: DimensionStyles) => {
   const savedValue = $number(dimension, 42, -1)

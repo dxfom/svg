@@ -34,7 +34,7 @@ export const MTEXT_attachmentPoint = (n: string | number | undefined) => {
   return { dominantBaseline, textAnchor }
 }
 
-const yx2angle = (y: number, x: number) => round(Math.atan2(y || 0, x || 0) * 180 / Math.PI, 5) || 0
+const yx2angle = (y: number, x: number) => round((Math.atan2(y || 0, x || 0) * 180) / Math.PI, 5) || 0
 
 export const MTEXT_angle = (mtext: DxfRecordReadonly): number => {
   for (let i = mtext.length - 1; i >= 0; i--) {
@@ -75,11 +75,15 @@ export const MTEXT_contents = (contents: readonly DxfMTextContentElement[], opti
   }
   if (content.S) {
     return (
-      <tspan>
-        <tspan dy='-.5em'>{content.S[0]}</tspan>
-        <tspan dy='1em' dx={content.S[0].length / -2 + 'em'}>{content.S[2]}</tspan>
-      </tspan>
-    ) + restContents
+      (
+        <tspan>
+          <tspan dy="-.5em">{content.S[0]}</tspan>
+          <tspan dy="1em" dx={content.S[0].length / -2 + 'em'}>
+            {content.S[2]}
+          </tspan>
+        </tspan>
+      ) + restContents
+    )
   }
   if (content.f) {
     const _font: DxfFont = { family: content.f, weight: content.b ? 700 : 400, style: content.i ? 'italic' : undefined }

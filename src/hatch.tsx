@@ -28,7 +28,7 @@ export const collectHatchPathElements = (hatch: DxfRecordReadonly): HatchPathEle
     const groupCode = hatch[i][0]
     switch (groupCode) {
       case 92:
-        paths.push(currentPath = { 10: [], 20: [] })
+        paths.push((currentPath = { 10: [], 20: [] }))
         break
       case 10:
       case 20:
@@ -51,7 +51,7 @@ const collectHatchPatternElements = (hatch: DxfRecordReadonly): HatchPatternElem
     const value = round(hatch[i][1])
     switch (groupCode) {
       case 53:
-        patterns.push(currentPattern = { 53: value, 43: 0, 44: 0, 45: 0, 46: 0, 49: [] })
+        patterns.push((currentPattern = { 53: value, 43: 0, 44: 0, 45: 0, 46: 0, 49: [] }))
         break
       case 43:
       case 44:
@@ -73,7 +73,7 @@ const collectHatchPatternElements = (hatch: DxfRecordReadonly): HatchPatternElem
 
 const hatchGradientDefs: Record<string, (id: string, colors: readonly [string, string], hatch: DxfRecordReadonly) => string> = {
   LINEAR: (id, colors, hatch) => {
-    const angle = round($number(hatch, 460) * 180 / Math.PI)
+    const angle = round(($number(hatch, 460) * 180) / Math.PI)
     return (
       <linearGradient id={id} x2="1" y2="0" gradientTransform={angle ? `rotate(${-angle},.5,.5)` : ''}>
         <stop stop-color={colors[0]} />
@@ -82,7 +82,7 @@ const hatchGradientDefs: Record<string, (id: string, colors: readonly [string, s
     )
   },
   CYLINDER: (id, colors, hatch) => {
-    const angle = round($number(hatch, 460) * 180 / Math.PI)
+    const angle = round(($number(hatch, 460) * 180) / Math.PI)
     return (
       <linearGradient id={id} x2="1" y2="0" gradientTransform={angle ? `rotate(${-angle},.5,.5)` : ''}>
         <stop stop-color={colors[0]} />
@@ -101,7 +101,13 @@ const hatchGradientDefs: Record<string, (id: string, colors: readonly [string, s
     const yMin = Math.min(...ys)
     const yMax = Math.max(...ys)
     return (
-      <radialGradient id={id} cx={(xMin + xMax) / 2} cy={-(yMin + yMax) / 2} r={Math.max(xMax - xMin, yMax - yMin) / 2} gradientUnits="userSpaceOnUse">
+      <radialGradient
+        id={id}
+        cx={(xMin + xMax) / 2}
+        cy={-(yMin + yMax) / 2}
+        r={Math.max(xMax - xMin, yMax - yMin) / 2}
+        gradientUnits="userSpaceOnUse"
+      >
         <stop stop-color={colors[1]} />
         <stop stop-color={colors[0]} offset="1" />
       </radialGradient>
@@ -124,7 +130,11 @@ const hatchGradientDefs: Record<string, (id: string, colors: readonly [string, s
   INVCURVED: (id, colors, hatch) => hatchGradientDefs.CURVED(id, [colors[1], colors[0]], hatch),
 }
 
-export const hatchFill = (hatch: DxfRecordReadonly, color: (entity: DxfRecordReadonly) => string, resolveColorIndex: (colorIndex: number) => string): [string, string] => {
+export const hatchFill = (
+  hatch: DxfRecordReadonly,
+  color: (entity: DxfRecordReadonly) => string,
+  resolveColorIndex: (colorIndex: number) => string,
+): [string, string] => {
   const fillColor = color(hatch)
   if ($trim(hatch, 450) === '1') {
     // gradient
@@ -146,30 +156,32 @@ export const hatchFill = (hatch: DxfRecordReadonly, color: (entity: DxfRecordRea
     const handle = $(hatch, 5)
     const id = `hatch-pattern-${handle}`
     const bgGroupCodeIndex = hatch.findIndex(([groupCode, value]) => groupCode === 1001 && value === 'HATCHBACKGROUNDCOLOR')
-    const bgColorIndex = bgGroupCodeIndex !== -1 && (+hatch[bgGroupCodeIndex + 1][1] & 255)
+    const bgColorIndex = bgGroupCodeIndex !== -1 && +hatch[bgGroupCodeIndex + 1][1] & 255
     const bgColor = bgColorIndex && resolveColorIndex(bgColorIndex)
-    return [`url(#${id})`, (
+    return [
+      `url(#${id})`,
       <defs>
-        {patternElements.map(({ 53: angle, 43: xBase, 44: yBase, 45: xOffset, 46: yOffset, 49: dasharray }, i) => {
-          dasharray[0] < 0 && dasharray.unshift(0)
-          dasharray.length % 2 === 1 && dasharray.push(0)
-          dasharray = dasharray.map(Math.abs)
-          const height = round(Math.hypot(xOffset, yOffset))
-          const width = round(dasharray.reduce((x, y) => x + y, 0)) || 256
-          const transform = (xBase || yBase ? `translate(${xBase},${-yBase})${angle ? ' ' : ''}` : '') + (angle ? `rotate(${-angle})` : '')
-          return(
-            <pattern id={`${id}-${i}`} width={width} height={height} patternUnits="userSpaceOnUse" patternTransform={transform}>
-              <line x2={width} stroke-width="1" stroke={fillColor} stroke-dasharray={dasharray.join(' ')} />
-            </pattern>
-          )
-        }).join('')}
+        {patternElements
+          .map(({ 53: angle, 43: xBase, 44: yBase, 45: xOffset, 46: yOffset, 49: dasharray }, i) => {
+            dasharray[0] < 0 && dasharray.unshift(0)
+            dasharray.length % 2 === 1 && dasharray.push(0)
+            dasharray = dasharray.map(Math.abs)
+            const height = round(Math.hypot(xOffset, yOffset))
+            const width = round(dasharray.reduce((x, y) => x + y, 0)) || 256
+            const transform =
+              (xBase || yBase ? `translate(${xBase},${-yBase})${angle ? ' ' : ''}` : '') + (angle ? `rotate(${-angle})` : '')
+            return (
+              <pattern id={`${id}-${i}`} width={width} height={height} patternUnits="userSpaceOnUse" patternTransform={transform}>
+                <line x2={width} stroke-width="1" stroke={fillColor} stroke-dasharray={dasharray.join(' ')} />
+              </pattern>
+            )
+          })
+          .join('')}
         <pattern id={id} width={256} height={256} patternUnits="userSpaceOnUse">
-          {
-            (bgColor ? <rect fill={bgColor} width={256} height={256} /> : '') +
-            patternElements.map((_, i) => <rect fill={`url(#hatch-pattern-${handle}-${i})`} width={256} height={256} />).join('')
-          }
+          {(bgColor ? <rect fill={bgColor} width={256} height={256} /> : '') +
+            patternElements.map((_, i) => <rect fill={`url(#hatch-pattern-${handle}-${i})`} width={256} height={256} />).join('')}
         </pattern>
-      </defs>
-    )]
+      </defs>,
+    ]
   }
 }

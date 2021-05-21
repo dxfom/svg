@@ -10,7 +10,7 @@ export const round = (() => {
   return (n: number | string, precision: number) => _shift(Math.round(_shift(n, precision)), -precision)
 })()
 
-export const trim = (s: string | undefined) => s ? s.trim() : s
+export const trim = (s: string | undefined) => (s ? s.trim() : s)
 export const $trim = (record: DxfRecordReadonly | undefined, groupCode: number) => trim($(record, groupCode))
 export const $number = (record: DxfRecordReadonly | undefined, groupCode: number, defaultValue?: number) => {
   const value = +$(record, groupCode)!
@@ -23,5 +23,7 @@ export const $number = (record: DxfRecordReadonly | undefined, groupCode: number
   const rounded = Math.round(value)
   return Math.abs(rounded - value) < 1e-8 ? rounded : value
 }
-export const $numbers = (record: DxfRecordReadonly, ...groupCodes: readonly number[]) => groupCodes.map(groupCode => $number(record, groupCode))
-export const $negates = (record: DxfRecordReadonly, ...groupCodes: readonly number[]) => groupCodes.map(groupCode => -$number(record, groupCode))
+export const $numbers = (record: DxfRecordReadonly, ...groupCodes: readonly number[]) =>
+  groupCodes.map(groupCode => $number(record, groupCode))
+export const $negates = (record: DxfRecordReadonly, ...groupCodes: readonly number[]) =>
+  groupCodes.map(groupCode => -$number(record, groupCode))
