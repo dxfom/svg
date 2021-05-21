@@ -122,10 +122,10 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const deg2 = $number(entity, 51, 0)
       const rad1 = (deg1 * Math.PI) / 180
       const rad2 = (deg2 * Math.PI) / 180
-      const x1 = cx + r * Math.cos(rad1)
-      const y1 = cy + r * Math.sin(rad1)
-      const x2 = cx + r * Math.cos(rad2)
-      const y2 = cy + r * Math.sin(rad2)
+      const x1 = roundCoordinate(cx + r * Math.cos(rad1))
+      const y1 = roundCoordinate(cy + r * Math.sin(rad1))
+      const x2 = roundCoordinate(cx + r * Math.cos(rad2))
+      const y2 = roundCoordinate(cy + r * Math.sin(rad2))
       const large = (deg2 - deg1 + 360) % 360 <= 180 ? '0' : '1'
       return [<path {...lineAttributes(entity)} d={`M${x1} ${-y1}A${r} ${r} 0 ${large} 0 ${x2} ${-y2}`} />, [x1, x2], [-y1, -y2]]
     },
