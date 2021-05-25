@@ -13,7 +13,7 @@ export const jsx = (type: string, props: Record<string, unknown>) => {
       s += ` ${key}="${typeof value === 'string' ? escapeHtml(value) : value}"`
     }
   }
-  if (type === 'line' || type === 'polyline' || type === 'polygon' || type === 'circle' || type === 'path') {
+  if (type === 'line' || type === 'polyline' || type === 'polygon' || type === 'circle' || type === 'ellipse' || type === 'path') {
     if (!props.fill) {
       s += ' fill="none"'
     }
