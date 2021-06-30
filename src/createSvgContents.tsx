@@ -6,7 +6,7 @@ import { Context } from './Context'
 import { collectDimensionStyles, dimensionValueToMText } from './dimension'
 import { collectHatchPathElements, hatchFill } from './hatch'
 import { MTEXT_angle, MTEXT_attachmentPoint, MTEXT_contents, MTEXT_contentsOptions } from './mtext'
-import { $number, $trim, nearlyEqual, rotate, round, transforms, translate } from './util'
+import { $number, $trim, escapeHtml, nearlyEqual, rotate, round, transforms, translate } from './util'
 
 export interface CreateSvgContentStringOptions extends MTEXT_contentsOptions {
   readonly warn: (message: string, ...args: any[]) => void
@@ -213,8 +213,8 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           text-decoration={contents.length === 1 && TEXT_textDecorations(contents[0])}
         >
           {contents.length === 1
-            ? contents[0].text
-            : contents.map(content => <tspan text-decoration={TEXT_textDecorations(content)}>{content.text}</tspan>)}
+            ? escapeHtml(contents[0].text)
+            : contents.map(content => <tspan text-decoration={TEXT_textDecorations(content)}>{escapeHtml(content.text)}</tspan>)}
         </text>,
         [x, x + h * contents.length],
         [y, y + h],

@@ -1,6 +1,6 @@
 import { DxfRecordReadonly } from '@dxfom/dxf'
 import { DxfMTextContentElement } from '@dxfom/mtext'
-import { $number, round } from './util'
+import { $number, escapeHtml, round } from './util'
 
 export const MTEXT_attachmentPoint = (n: string | number | undefined) => {
   n = +n!
@@ -68,7 +68,7 @@ export const MTEXT_contents = (contents: readonly DxfMTextContentElement[], opti
   const restContents = MTEXT_contents(contents, options, i + 1)
   const content = contents[i]
   if (typeof content === 'string') {
-    return content + restContents
+    return escapeHtml(content) + restContents
   }
   if (Array.isArray(content)) {
     return MTEXT_contents(content, options) + restContents
@@ -77,9 +77,9 @@ export const MTEXT_contents = (contents: readonly DxfMTextContentElement[], opti
     return (
       (
         <tspan>
-          <tspan dy="-.5em">{content.S[0]}</tspan>
+          <tspan dy="-.5em">{escapeHtml(content.S[0])}</tspan>
           <tspan dy="1em" dx={content.S[0].length / -2 + 'em'}>
-            {content.S[2]}
+            {escapeHtml(content.S[2])}
           </tspan>
         </tspan>
       ) + restContents

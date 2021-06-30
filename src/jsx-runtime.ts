@@ -1,4 +1,4 @@
-const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+import { escapeHtml } from './util'
 
 export const jsx = (type: string, props: Record<string, unknown>) => {
   let s = '<' + type

@@ -3,6 +3,7 @@ import { getGroupCodeValue, getGroupCodeValues } from '@dxfom/dxf';
 import { parseDxfMTextContent } from '@dxfom/mtext';
 import { parseDxfTextContent } from '@dxfom/text';
 
+const escapeHtml = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 const smallNumber = 1 / 64;
 const nearlyEqual = (a, b) => Math.abs(a - b) < smallNumber;
 const round$1 = (() => {
@@ -202,8 +203,6 @@ const dimensionValueToMText = (measurement, dimension, styles) => {
   const template = getGroupCodeValue(dimension, 1);
   return template ? template.replace(/<>/, valueWithTolerance) : valueWithTolerance;
 };
-
-const escapeHtml = s => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 
 const jsx = (type, props) => {
   let s = '<' + type;
@@ -550,7 +549,7 @@ const MTEXT_contents = (contents, options, i = 0) => {
   const content = contents[i];
 
   if (typeof content === 'string') {
-    return content + restContents;
+    return escapeHtml(content) + restContents;
   }
 
   if (Array.isArray(content)) {
@@ -561,11 +560,11 @@ const MTEXT_contents = (contents, options, i = 0) => {
     return jsxs("tspan", {
       children: [jsx("tspan", {
         dy: "-.5em",
-        children: content.S[0]
+        children: escapeHtml(content.S[0])
       }), jsx("tspan", {
         dy: "1em",
         dx: content.S[0].length / -2 + 'em',
-        children: content.S[2]
+        children: escapeHtml(content.S[2])
       })]
     }) + restContents;
   }
@@ -822,9 +821,9 @@ const createEntitySvgMap = (dxf, options) => {
         "text-anchor": TEXT_textAnchor[$trim(entity, 72)],
         transform: rotate(angle, x, y),
         "text-decoration": contents.length === 1 && TEXT_textDecorations(contents[0]),
-        children: contents.length === 1 ? contents[0].text : contents.map(content => jsx("tspan", {
+        children: contents.length === 1 ? escapeHtml(contents[0].text) : contents.map(content => jsx("tspan", {
           "text-decoration": TEXT_textDecorations(content),
-          children: content.text
+          children: escapeHtml(content.text)
         }))
       }), [x, x + h * contents.length], [y, y + h]];
     },

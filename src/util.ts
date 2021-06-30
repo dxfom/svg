@@ -1,5 +1,7 @@
 import { DxfRecordReadonly, getGroupCodeValue as $ } from '@dxfom/dxf'
 
+export const escapeHtml = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;')
+
 const smallNumber = 1 / 64
 export const nearlyEqual = (a: number, b: number) => Math.abs(a - b) < smallNumber
 export const round = (() => {
