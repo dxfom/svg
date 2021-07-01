@@ -1,10 +1,13 @@
-import { parseDxfFileArrayBuffer } from '@dxfom/dxf'
+import { getGroupCodeValue, parseDxfFileArrayBuffer } from '@dxfom/dxf'
 import { createSvgString } from '..'
 import { onDragDrop } from './onDragDrop'
 
 const textDecoder = new TextDecoder('ms932')
 const handleFile = async (file: File) =>
-  (document.body.innerHTML = createSvgString(parseDxfFileArrayBuffer(await file.arrayBuffer()), { encoding: textDecoder }))
+  (document.body.innerHTML = createSvgString(parseDxfFileArrayBuffer(await file.arrayBuffer()), {
+    encoding: textDecoder,
+    addAttributes: entity => ({ 'data-5': getGroupCodeValue(entity, 5) }),
+  }))
 
 const input = document.body.appendChild(document.createElement('input'))
 input.type = 'file'

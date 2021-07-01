@@ -1,4 +1,4 @@
-import { DxfReadonly } from '@dxfom/dxf';
+import { DxfReadonly, DxfRecordReadonly } from '@dxfom/dxf';
 
 export interface DxfFont {
 	readonly family: string;
@@ -14,6 +14,7 @@ export interface CreateSvgContentStringOptions extends MTEXT_contentsOptions {
 	readonly resolveColorIndex: (colorIndex: number) => string;
 	readonly resolveLineWeight: (lineWeight: number) => number;
 	readonly encoding?: string | TextDecoder;
+	readonly addAttributes?: (entity: DxfRecordReadonly) => Record<string, string | number | boolean>;
 }
 export declare const createSvgContents: (dxf: DxfReadonly, options?: Partial<CreateSvgContentStringOptions> | undefined) => readonly [
 	string,

@@ -13,6 +13,7 @@ export interface CreateSvgContentStringOptions extends MTEXT_contentsOptions {
   readonly resolveColorIndex: (colorIndex: number) => string
   readonly resolveLineWeight: (lineWeight: number) => number
   readonly encoding?: string | TextDecoder
+  readonly addAttributes?: (entity: DxfRecordReadonly) => Record<string, string | number | boolean>
 }
 
 const defaultOptions: CreateSvgContentStringOptions = {
@@ -20,10 +21,6 @@ const defaultOptions: CreateSvgContentStringOptions = {
   resolveColorIndex: colorIndex => DXF_COLOR_HEX[colorIndex] ?? '#888',
   resolveLineWeight: lineWeight => (lineWeight === -3 ? 0.5 : round(lineWeight * 10, 6)),
 }
-
-const commonAttributes = (entity: DxfRecordReadonly) => ({
-  'data-5': $trim(entity, 5),
-})
 
 type Vec3 = [number, number, number]
 
@@ -77,13 +74,16 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
   const roundCoordinate: typeof context.roundCoordinate = n => context.roundCoordinate(n)
   const $roundCoordinate = (entity: DxfRecordReadonly, groupCode: number) => roundCoordinate($(entity, groupCode))
 
-  const lineAttributes = (entity: DxfRecordReadonly) =>
-    Object.assign(commonAttributes(entity), {
-      stroke: context.color(entity),
-      'stroke-width': context.strokeWidth(entity),
-      'stroke-dasharray': context.strokeDasharray(entity),
-      style: extrusionStyle(entity),
-    })
+  // prettier-ignore
+  const addAttributes = options.addAttributes ?? (() => undefined)
+  const lineAttributes = (entity: DxfRecordReadonly) => ({
+    fill: 'none',
+    stroke: context.color(entity),
+    'stroke-width': context.strokeWidth(entity),
+    'stroke-dasharray': context.strokeDasharray(entity),
+    style: extrusionStyle(entity),
+    ...addAttributes(entity),
+  })
 
   const entitySvgMap: CreateEntitySvgMapResult = {
     POINT: () => undefined,
@@ -92,27 +92,27 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const x2 = $roundCoordinate(entity, 11)
       const y1 = -$roundCoordinate(entity, 20)
       const y2 = -$roundCoordinate(entity, 21)
-      return [<line {...lineAttributes(entity)} x1={x1} y1={y1} x2={x2} y2={y2} />, [x1, x2], [y1, y2]]
+      return [<line x1={x1} y1={y1} x2={x2} y2={y2} {...lineAttributes(entity)} />, [x1, x2], [y1, y2]]
     },
     POLYLINE: (entity, vertices) => {
       const xs = vertices.map(v => $roundCoordinate(v, 10))
       const ys = vertices.map(v => -$roundCoordinate(v, 20))
       const flags = +($(entity, 70) ?? 0)
-      const attrs = Object.assign(lineAttributes(entity), { points: polylinePoints(xs, ys) })
+      const attrs = { points: polylinePoints(xs, ys), ...lineAttributes(entity) }
       return [flags & 1 ? <polygon {...attrs} /> : <polyline {...attrs} />, xs, ys]
     },
     LWPOLYLINE: entity => {
       const xs = $$(entity, 10).map(s => roundCoordinate(s))
       const ys = $$(entity, 20).map(s => -roundCoordinate(s))
       const flags = +($(entity, 70) ?? 0)
-      const attrs = Object.assign(lineAttributes(entity), { points: polylinePoints(xs, ys) })
+      const attrs = { points: polylinePoints(xs, ys), ...lineAttributes(entity) }
       return [flags & 1 ? <polygon {...attrs} /> : <polyline {...attrs} />, xs, ys]
     },
     CIRCLE: entity => {
       const cx = $roundCoordinate(entity, 10)
       const cy = -$roundCoordinate(entity, 20)
       const r = $roundCoordinate(entity, 40)
-      return [<circle {...lineAttributes(entity)} cx={cx} cy={cy} r={r} />, [cx - r, cx + r], [cy - r, cy + r]]
+      return [<circle cx={cx} cy={cy} r={r} {...lineAttributes(entity)} />, [cx - r, cx + r], [cy - r, cy + r]]
     },
     ARC: entity => {
       const cx = $roundCoordinate(entity, 10)
@@ -127,7 +127,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const x2 = roundCoordinate(cx + r * Math.cos(rad2))
       const y2 = roundCoordinate(cy + r * Math.sin(rad2))
       const large = (deg2 - deg1 + 360) % 360 <= 180 ? '0' : '1'
-      return [<path {...lineAttributes(entity)} d={`M${x1} ${-y1}A${r} ${r} 0 ${large} 0 ${x2} ${-y2}`} />, [x1, x2], [-y1, -y2]]
+      return [<path d={`M${x1} ${-y1}A${r} ${r} 0 ${large} 0 ${x2} ${-y2}`} {...lineAttributes(entity)} />, [x1, x2], [-y1, -y2]]
     },
     ELLIPSE: entity => {
       // https://wiki.gz-labs.net/index.php/ELLIPSE
@@ -143,7 +143,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
         const radAngleOffset = -Math.atan2(majorY, majorX)
         const transform = rotate((radAngleOffset * 180) / Math.PI, cx, cy)
         return [
-          <ellipse {...lineAttributes(entity)} cx={cx} cy={cy} rx={majorR} ry={minorR} transform={transform} />,
+          <ellipse cx={cx} cy={cy} rx={majorR} ry={minorR} transform={transform} {...lineAttributes(entity)} />,
           [cx - majorR, cx + majorR],
           [cy - minorR, cy + minorR],
         ]
@@ -154,16 +154,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
     LEADER: entity => {
       const xs = $$(entity, 10).map(s => roundCoordinate(s))
       const ys = $$(entity, 20).map(s => -roundCoordinate(s))
-      return [
-        <polyline
-          {...commonAttributes(entity)}
-          points={polylinePoints(xs, ys)}
-          stroke={context.color(entity)}
-          stroke-dasharray={context.strokeDasharray(entity)}
-        />,
-        xs,
-        ys,
-      ]
+      return [<polyline points={polylinePoints(xs, ys)} {...lineAttributes(entity)} style={undefined} />, xs, ys]
     },
     HATCH: entity => {
       const paths = collectHatchPathElements(entity, context)
@@ -177,7 +168,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       d += 'Z'
       const [fill, defs] = hatchFill(entity, paths, context)
       return [
-        defs + <path {...commonAttributes(entity)} d={d} fill={fill} />,
+        defs + <path d={d} fill={fill} {...addAttributes(entity)} />,
         paths.flatMap(path => path[10]),
         paths.flatMap(path => -path[20]),
       ]
@@ -192,7 +183,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const y3 = -$roundCoordinate(entity, 22)
       const y4 = -$roundCoordinate(entity, 23)
       const d = `M${x1} ${y1}L${x2} ${y2}L${x3} ${y3}${x3 !== x4 || y3 !== y4 ? `L${x4} ${y4}` : ''}Z`
-      return [<path {...commonAttributes(entity)} d={d} fill={context.color(entity)} />, [x1, x2, x3, x4], [y1, y2, y3, y4]]
+      return [<path d={d} fill={context.color(entity)} {...addAttributes(entity)} />, [x1, x2, x3, x4], [y1, y2, y3, y4]]
     },
     TEXT: entity => {
       const x = $roundCoordinate(entity, 10)
@@ -202,7 +193,6 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const contents = parseDxfTextContent($(entity, 1) || '', options)
       return [
         <text
-          {...commonAttributes(entity)}
           x={x}
           y={y}
           fill={context.color(entity)}
@@ -211,6 +201,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           text-anchor={TEXT_textAnchor[$trim(entity, 72) as string & number]}
           transform={rotate(angle, x, y)}
           text-decoration={contents.length === 1 && TEXT_textDecorations(contents[0])}
+          {...addAttributes(entity)}
         >
           {contents.length === 1
             ? escapeHtml(contents[0].text)
@@ -229,7 +220,6 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const contents = $$(entity, 3).join('') + ($(entity, 1) ?? '')
       return [
         <text
-          {...commonAttributes(entity)}
           x={x}
           y={y}
           fill={context.color(entity)}
@@ -237,6 +227,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           dominant-baseline={dominantBaseline}
           text-anchor={textAnchor}
           transform={rotate(-angle, x, y)}
+          {...addAttributes(entity)}
         >
           {MTEXT_contents(parseDxfMTextContent(contents, options), options)}
         </text>,
@@ -339,11 +330,11 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       }
       return [
         <g
-          {...commonAttributes(entity)}
           color={context.color(entity)}
           stroke-width={context.strokeWidth(entity)}
           stroke-dasharray={context.strokeDasharray(entity)}
           style={extrusionStyle(entity)}
+          {...addAttributes(entity)}
         >
           {lineElements + textElement}
         </g>,
@@ -399,7 +390,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const x = $roundCoordinate(entity, 10)
       const y = -$roundCoordinate(entity, 20)
       return [
-        <g {...commonAttributes(entity)} font-size={$trim(entity, 140)} dominant-baseline="text-before-edge" transform={translate(x, y)}>
+        <g font-size={$trim(entity, 140)} dominant-baseline="text-before-edge" transform={translate(x, y)} {...addAttributes(entity)}>
           {s}
         </g>,
         xs.map(_x => _x + x),
@@ -417,13 +408,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const block = _block?.slice($(_block[0], 0) === 'BLOCK' ? 1 : 0, $(_block[_block.length - 1], 0) === 'ENDBLK' ? -1 : undefined)
       const [contents, bbox] = entitiesSvg(block, entitySvgMap, options)
       return [
-        <g
-          {...lineAttributes(entity)}
-          color={context._color(entity)}
-          stroke-width={context.strokeWidth(entity)}
-          stroke-dasharray={context.strokeDasharray(entity)}
-          transform={transform}
-        >
+        <g color={context._color(entity)} transform={transform} {...lineAttributes(entity)}>
           {contents}
         </g>,
         [x + bbox.x * xscale, x + (bbox.x + bbox.w) * xscale],

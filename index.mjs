@@ -603,10 +603,6 @@ const defaultOptions = {
   resolveLineWeight: lineWeight => lineWeight === -3 ? 0.5 : round$1(lineWeight * 10, 6)
 };
 
-const commonAttributes = entity => ({
-  'data-5': $trim(entity, 5)
-});
-
 const normalizeVector3 = ([x, y, z]) => {
   const a = Math.hypot(x, y, z);
   return [x / a, y / a, z / a];
@@ -663,13 +659,18 @@ const createEntitySvgMap = (dxf, options) => {
 
   const roundCoordinate = n => context.roundCoordinate(n);
 
-  const $roundCoordinate = (entity, groupCode) => roundCoordinate(getGroupCodeValue(entity, groupCode));
+  const $roundCoordinate = (entity, groupCode) => roundCoordinate(getGroupCodeValue(entity, groupCode)); // prettier-ignore
 
-  const lineAttributes = entity => Object.assign(commonAttributes(entity), {
+
+  const addAttributes = options.addAttributes ?? (() => undefined);
+
+  const lineAttributes = entity => ({
+    fill: 'none',
     stroke: context.color(entity),
     'stroke-width': context.strokeWidth(entity),
     'stroke-dasharray': context.strokeDasharray(entity),
-    style: extrusionStyle(entity)
+    style: extrusionStyle(entity),
+    ...addAttributes(entity)
   });
 
   const entitySvgMap = {
@@ -679,20 +680,22 @@ const createEntitySvgMap = (dxf, options) => {
       const x2 = $roundCoordinate(entity, 11);
       const y1 = -$roundCoordinate(entity, 20);
       const y2 = -$roundCoordinate(entity, 21);
-      return [jsx("line", { ...lineAttributes(entity),
+      return [jsx("line", {
         x1: x1,
         y1: y1,
         x2: x2,
-        y2: y2
+        y2: y2,
+        ...lineAttributes(entity)
       }), [x1, x2], [y1, y2]];
     },
     POLYLINE: (entity, vertices) => {
       const xs = vertices.map(v => $roundCoordinate(v, 10));
       const ys = vertices.map(v => -$roundCoordinate(v, 20));
       const flags = +(getGroupCodeValue(entity, 70) ?? 0);
-      const attrs = Object.assign(lineAttributes(entity), {
-        points: polylinePoints(xs, ys)
-      });
+      const attrs = {
+        points: polylinePoints(xs, ys),
+        ...lineAttributes(entity)
+      };
       return [flags & 1 ? jsx("polygon", { ...attrs
       }) : jsx("polyline", { ...attrs
       }), xs, ys];
@@ -701,9 +704,10 @@ const createEntitySvgMap = (dxf, options) => {
       const xs = getGroupCodeValues(entity, 10).map(s => roundCoordinate(s));
       const ys = getGroupCodeValues(entity, 20).map(s => -roundCoordinate(s));
       const flags = +(getGroupCodeValue(entity, 70) ?? 0);
-      const attrs = Object.assign(lineAttributes(entity), {
-        points: polylinePoints(xs, ys)
-      });
+      const attrs = {
+        points: polylinePoints(xs, ys),
+        ...lineAttributes(entity)
+      };
       return [flags & 1 ? jsx("polygon", { ...attrs
       }) : jsx("polyline", { ...attrs
       }), xs, ys];
@@ -712,10 +716,11 @@ const createEntitySvgMap = (dxf, options) => {
       const cx = $roundCoordinate(entity, 10);
       const cy = -$roundCoordinate(entity, 20);
       const r = $roundCoordinate(entity, 40);
-      return [jsx("circle", { ...lineAttributes(entity),
+      return [jsx("circle", {
         cx: cx,
         cy: cy,
-        r: r
+        r: r,
+        ...lineAttributes(entity)
       }), [cx - r, cx + r], [cy - r, cy + r]];
     },
     ARC: entity => {
@@ -731,8 +736,9 @@ const createEntitySvgMap = (dxf, options) => {
       const x2 = roundCoordinate(cx + r * Math.cos(rad2));
       const y2 = roundCoordinate(cy + r * Math.sin(rad2));
       const large = (deg2 - deg1 + 360) % 360 <= 180 ? '0' : '1';
-      return [jsx("path", { ...lineAttributes(entity),
-        d: `M${x1} ${-y1}A${r} ${r} 0 ${large} 0 ${x2} ${-y2}`
+      return [jsx("path", {
+        d: `M${x1} ${-y1}A${r} ${r} 0 ${large} 0 ${x2} ${-y2}`,
+        ...lineAttributes(entity)
       }), [x1, x2], [-y1, -y2]];
     },
     ELLIPSE: entity => {
@@ -749,12 +755,13 @@ const createEntitySvgMap = (dxf, options) => {
         const minorR = $number(entity, 40) * majorR;
         const radAngleOffset = -Math.atan2(majorY, majorX);
         const transform = rotate(radAngleOffset * 180 / Math.PI, cx, cy);
-        return [jsx("ellipse", { ...lineAttributes(entity),
+        return [jsx("ellipse", {
           cx: cx,
           cy: cy,
           rx: majorR,
           ry: minorR,
-          transform: transform
+          transform: transform,
+          ...lineAttributes(entity)
         }), [cx - majorR, cx + majorR], [cy - minorR, cy + minorR]];
       } else {
         warn('Elliptical arc cannot be rendered yet.');
@@ -763,10 +770,10 @@ const createEntitySvgMap = (dxf, options) => {
     LEADER: entity => {
       const xs = getGroupCodeValues(entity, 10).map(s => roundCoordinate(s));
       const ys = getGroupCodeValues(entity, 20).map(s => -roundCoordinate(s));
-      return [jsx("polyline", { ...commonAttributes(entity),
+      return [jsx("polyline", {
         points: polylinePoints(xs, ys),
-        stroke: context.color(entity),
-        "stroke-dasharray": context.strokeDasharray(entity)
+        ...lineAttributes(entity),
+        style: undefined
       }), xs, ys];
     },
     HATCH: entity => {
@@ -786,9 +793,10 @@ const createEntitySvgMap = (dxf, options) => {
 
       d += 'Z';
       const [fill, defs] = hatchFill(entity, paths, context);
-      return [defs + jsx("path", { ...commonAttributes(entity),
+      return [defs + jsx("path", {
         d: d,
-        fill: fill
+        fill: fill,
+        ...addAttributes(entity)
       }), paths.flatMap(path => path[10]), paths.flatMap(path => -path[20])];
     },
     SOLID: entity => {
@@ -801,9 +809,10 @@ const createEntitySvgMap = (dxf, options) => {
       const y3 = -$roundCoordinate(entity, 22);
       const y4 = -$roundCoordinate(entity, 23);
       const d = `M${x1} ${y1}L${x2} ${y2}L${x3} ${y3}${x3 !== x4 || y3 !== y4 ? `L${x4} ${y4}` : ''}Z`;
-      return [jsx("path", { ...commonAttributes(entity),
+      return [jsx("path", {
         d: d,
-        fill: context.color(entity)
+        fill: context.color(entity),
+        ...addAttributes(entity)
       }), [x1, x2, x3, x4], [y1, y2, y3, y4]];
     },
     TEXT: entity => {
@@ -812,7 +821,7 @@ const createEntitySvgMap = (dxf, options) => {
       const h = $roundCoordinate(entity, 40);
       const angle = -$number(entity, 50);
       const contents = parseDxfTextContent(getGroupCodeValue(entity, 1) || '', options);
-      return [jsx("text", { ...commonAttributes(entity),
+      return [jsx("text", {
         x: x,
         y: y,
         fill: context.color(entity),
@@ -821,6 +830,7 @@ const createEntitySvgMap = (dxf, options) => {
         "text-anchor": TEXT_textAnchor[$trim(entity, 72)],
         transform: rotate(angle, x, y),
         "text-decoration": contents.length === 1 && TEXT_textDecorations(contents[0]),
+        ...addAttributes(entity),
         children: contents.length === 1 ? escapeHtml(contents[0].text) : contents.map(content => jsx("tspan", {
           "text-decoration": TEXT_textDecorations(content),
           children: escapeHtml(content.text)
@@ -837,7 +847,7 @@ const createEntitySvgMap = (dxf, options) => {
         textAnchor
       } = MTEXT_attachmentPoint($trim(entity, 71));
       const contents = getGroupCodeValues(entity, 3).join('') + (getGroupCodeValue(entity, 1) ?? '');
-      return [jsx("text", { ...commonAttributes(entity),
+      return [jsx("text", {
         x: x,
         y: y,
         fill: context.color(entity),
@@ -845,6 +855,7 @@ const createEntitySvgMap = (dxf, options) => {
         "dominant-baseline": dominantBaseline,
         "text-anchor": textAnchor,
         transform: rotate(-angle, x, y),
+        ...addAttributes(entity),
         children: MTEXT_contents(parseDxfMTextContent(contents, options), options)
       }), [x, x + h * contents.length], [y, y + h]];
     },
@@ -970,11 +981,12 @@ const createEntitySvgMap = (dxf, options) => {
           children: MTEXT_contents(parseDxfMTextContent(mtext, options), options)
         });
       }
-      return [jsx("g", { ...commonAttributes(entity),
+      return [jsx("g", {
         color: context.color(entity),
         "stroke-width": context.strokeWidth(entity),
         "stroke-dasharray": context.strokeDasharray(entity),
         style: extrusionStyle(entity),
+        ...addAttributes(entity),
         children: lineElements + textElement
       }), xs, ys];
     },
@@ -1047,10 +1059,11 @@ const createEntitySvgMap = (dxf, options) => {
       });
       const x = $roundCoordinate(entity, 10);
       const y = -$roundCoordinate(entity, 20);
-      return [jsx("g", { ...commonAttributes(entity),
+      return [jsx("g", {
         "font-size": $trim(entity, 140),
         "dominant-baseline": "text-before-edge",
         transform: translate(x, y),
+        ...addAttributes(entity),
         children: s
       }), xs.map(_x => _x + x), ys.map(_y => _y + y)];
     },
@@ -1066,11 +1079,10 @@ const createEntitySvgMap = (dxf, options) => {
 
       const block = _block?.slice(getGroupCodeValue(_block[0], 0) === 'BLOCK' ? 1 : 0, getGroupCodeValue(_block[_block.length - 1], 0) === 'ENDBLK' ? -1 : undefined);
       const [contents, bbox] = entitiesSvg(block, entitySvgMap, options);
-      return [jsx("g", { ...lineAttributes(entity),
+      return [jsx("g", {
         color: context._color(entity),
-        "stroke-width": context.strokeWidth(entity),
-        "stroke-dasharray": context.strokeDasharray(entity),
         transform: transform,
+        ...lineAttributes(entity),
         children: contents
       }), [x + bbox.x * xscale, x + (bbox.x + bbox.w) * xscale], [y + bbox.y * yscale, y + (bbox.y + bbox.h) * yscale]];
     }
