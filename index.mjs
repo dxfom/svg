@@ -64,7 +64,7 @@ class Context {
     }
 
     for (const ltype of dxf.TABLES?.LTYPE ?? []) {
-      if (getGroupCodeValue(ltype, 0) === 'LTYPE') {
+      if (getGroupCodeValue(ltype, 0) !== 'LTYPE') {
         continue;
       }
 
@@ -81,7 +81,7 @@ class Context {
   }
 
   ltype(entity) {
-    const ltypeId = $trim(entity, 8) ?? this.layer(entity)?.ltype;
+    const ltypeId = $trim(entity, 6) ?? this.layer(entity)?.ltype;
     return ltypeId ? this.ltypeMap.get(ltypeId) : undefined;
   }
 

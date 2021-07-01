@@ -35,7 +35,7 @@ export class Context {
     }
 
     for (const ltype of dxf.TABLES?.LTYPE ?? []) {
-      if ($(ltype, 0) === 'LTYPE') {
+      if ($(ltype, 0) !== 'LTYPE') {
         continue
       }
       const strokeDasharray = resolveStrokeDasharray($$(ltype, 49).map(s => round(s, 8)))
@@ -49,7 +49,7 @@ export class Context {
   }
 
   ltype(entity: DxfRecordReadonly) {
-    const ltypeId = $trim(entity, 8) ?? this.layer(entity)?.ltype
+    const ltypeId = $trim(entity, 6) ?? this.layer(entity)?.ltype
     return ltypeId ? this.ltypeMap.get(ltypeId) : undefined
   }
 
