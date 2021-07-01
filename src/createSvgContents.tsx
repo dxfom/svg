@@ -13,7 +13,7 @@ export interface CreateSvgContentStringOptions extends MTEXT_contentsOptions {
   readonly resolveColorIndex: (colorIndex: number) => string
   readonly resolveLineWeight: (lineWeight: number) => number
   readonly encoding?: string | TextDecoder
-  readonly addAttributes?: (entity: DxfRecordReadonly) => Record<string, string | number | boolean>
+  readonly addAttributes?: (entity: DxfRecordReadonly) => Record<string, string | number | boolean | undefined>
 }
 
 const defaultOptions: CreateSvgContentStringOptions = {
