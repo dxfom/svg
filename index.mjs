@@ -1073,7 +1073,7 @@ const createEntitySvgMap = (dxf, options) => {
       const angle = -$number(entity, 50);
       const xscale = $number(entity, 41, 1) || 1;
       const yscale = $number(entity, 42, 1) || 1;
-      const transform = transforms(translate(x, y), xscale !== 1 || yscale !== 1 ? `scale(${yscale},${xscale})` : '', rotate(angle));
+      const transform = transforms(rotate(angle, x, y), translate(x, y), xscale !== 1 || yscale !== 1 ? `scale(${xscale},${yscale})` : '');
 
       const _block = dxf.BLOCKS?.[getGroupCodeValue(entity, 2)];
 
