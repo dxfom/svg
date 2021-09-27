@@ -403,7 +403,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const angle = -$number(entity, 50)
       const xscale = $number(entity, 41, 1) || 1
       const yscale = $number(entity, 42, 1) || 1
-      const transform = transforms(translate(x, y), xscale !== 1 || yscale !== 1 ? `scale(${xscale},${yscale})` : '', rotate(angle))
+      const transform = transforms(translate(x, y), xscale !== 1 || yscale !== 1 ? `scale(${yscale},${xscale})` : '', rotate(angle))
       const _block = dxf.BLOCKS?.[$(entity, 2)!]
       const block = _block?.slice($(_block[0], 0) === 'BLOCK' ? 1 : 0, $(_block[_block.length - 1], 0) === 'ENDBLK' ? -1 : undefined)
       const [contents, bbox] = entitiesSvg(block, entitySvgMap, options)
