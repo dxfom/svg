@@ -16,7 +16,7 @@ export interface CreateSvgContentStringOptions extends MTEXT_contentsOptions {
 	readonly encoding?: string | TextDecoder;
 	readonly addAttributes?: (entity: DxfRecordReadonly) => Record<string, string | number | boolean | undefined>;
 }
-export declare const createSvgContents: (dxf: DxfReadonly, options?: Partial<CreateSvgContentStringOptions> | undefined) => readonly [
+export declare const createSvgContents: (dxf: DxfReadonly, options?: Partial<CreateSvgContentStringOptions>) => readonly [
 	string,
 	{
 		readonly x: number;
@@ -25,6 +25,6 @@ export declare const createSvgContents: (dxf: DxfReadonly, options?: Partial<Cre
 		readonly h: number;
 	}
 ];
-export declare const createSvgString: (dxf: DxfReadonly, options?: Partial<CreateSvgContentStringOptions> | undefined) => string;
+export declare const createSvgString: (dxf: DxfReadonly, options?: Partial<CreateSvgContentStringOptions>) => string;
 
 export {};
