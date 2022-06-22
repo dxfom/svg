@@ -1,8 +1,7 @@
 {
   "name": "@dxfom/svg",
-  "version": "0.0.0",
+  "version": "0.0.1",
   "description": "",
-  "private": true,
   "license": "GPL-3.0",
   "repository": "dxfom/svg",
   "keywords": [
