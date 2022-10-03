@@ -92,6 +92,21 @@ const bulgedPolylinePath = (xs: readonly number[], ys: readonly number[], bulges
   return path
 }
 
+const polyline = (
+  xs: number[],
+  ys: number[],
+  bulges: number[],
+  flags: number,
+  attributes: Record<string, unknown>,
+): [string, number[], number[]] | undefined => {
+  if (bulges.some(Boolean)) {
+    return [<path d={bulgedPolylinePath(xs, ys, bulges) + (flags & 1 ? 'Z' : '')} {...attributes} />, xs, ys]
+  } else {
+    const attrs = { points: polylinePoints(xs, ys), ...attributes }
+    return [flags & 1 ? <polygon {...attrs} /> : <polyline {...attrs} />, xs, ys]
+  }
+}
+
 const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOptions) => CreateEntitySvgMapResult = (dxf, options) => {
   const { warn, resolveColorIndex } = options
   const context = new Context(dxf, options)
@@ -118,24 +133,43 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       const y2 = -$roundCoordinate(entity, 21)
       return [<line x1={x1} y1={y1} x2={x2} y2={y2} {...lineAttributes(entity)} />, [x1, x2], [y1, y2]]
     },
-    POLYLINE: (entity, vertices) => {
-      const xs = vertices.map(v => $roundCoordinate(v, 10))
-      const ys = vertices.map(v => -$roundCoordinate(v, 20))
-      const bulges = vertices.map(v => $roundCoordinate(v, 42) || 0)
-      const flags = +($(entity, 70) ?? 0)
-      if (bulges.some(Boolean)) {
-        return [<path d={bulgedPolylinePath(xs, ys, bulges) + (flags & 1 ? 'Z' : '')} {...lineAttributes(entity)} />, xs, ys]
-      } else {
-        const attrs = { points: polylinePoints(xs, ys), ...lineAttributes(entity) }
-        return [flags & 1 ? <polygon {...attrs} /> : <polyline {...attrs} />, xs, ys]
-      }
-    },
+    POLYLINE: (entity, vertices) =>
+      polyline(
+        vertices.map(v => $roundCoordinate(v, 10)),
+        vertices.map(v => -$roundCoordinate(v, 20)),
+        vertices.map(v => $roundCoordinate(v, 42) || 0),
+        +($(entity, 70) ?? 0),
+        lineAttributes(entity),
+      ),
     LWPOLYLINE: entity => {
-      const xs = $$(entity, 10).map(s => roundCoordinate(s))
-      const ys = $$(entity, 20).map(s => -roundCoordinate(s))
-      const flags = +($(entity, 70) ?? 0)
-      const attrs = { points: polylinePoints(xs, ys), ...lineAttributes(entity) }
-      return [flags & 1 ? <polygon {...attrs} /> : <polyline {...attrs} />, xs, ys]
+      const xs: number[] = []
+      const ys: number[] = []
+      const bulges: number[] = []
+      for (let i = 0; i < entity.length; i++) {
+        if (entity[i][0] === 10) {
+          const x = +entity[i][1]
+          let y: number | undefined
+          let bulge = 0
+          while (++i < entity.length) {
+            const groupCode = entity[i][0]
+            if (groupCode === 10) {
+              i--
+              break
+            }
+            if (groupCode === 20) {
+              y = -entity[i][1]
+            } else if (groupCode === 42) {
+              bulge = +entity[i][1]
+            }
+          }
+          if (!isNaN(x) && !isNaN(y!)) {
+            xs.push(x)
+            ys.push(y!)
+            bulges.push(bulge)
+          }
+        }
+      }
+      return polyline(xs, ys, bulges, +($(entity, 70) ?? 0), lineAttributes(entity))
     },
     CIRCLE: entity => {
       const cx = $roundCoordinate(entity, 10)
