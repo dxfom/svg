@@ -641,13 +641,42 @@ const TEXT_dominantBaseline = [, 'text-after-edge', 'central', 'text-before-edge
 const TEXT_textAnchor = [, 'middle', 'end',, 'middle'];
 
 const polylinePoints = (xs, ys) => {
-  let points = '';
-
-  for (let i = 0; i < xs.length; i++) {
-    points += `${xs[i]},${ys[i]} `;
+  if (xs.length === 0) {
+    return '';
   }
 
-  return points.slice(0, -1);
+  let points = `${xs[0]},${ys[0]}`;
+
+  for (let i = 0; i < xs.length; i++) {
+    points += ` ${xs[i]},${ys[i]}`;
+  }
+
+  return points;
+};
+
+const bulgedPolylinePath = (xs, ys, bulges) => {
+  if (xs.length === 0) {
+    return '';
+  }
+
+  let path = `M${xs[0]} ${ys[0]}`;
+
+  for (let i = 1; i < xs.length; i++) {
+    const x = xs[i];
+    const y = ys[i];
+    const bulge = bulges[i - 1];
+
+    if (bulge) {
+      const r = Math.hypot(x - xs[i - 1], y - ys[i - 1]) * Math.abs(bulge + 1 / bulge) * 0.25;
+      const large = Math.abs(bulge) > 1 ? '1' : '0';
+      const sweep = bulge < 0 ? '1' : '0';
+      path += `A${r} ${r} 0 ${large} ${sweep} ${x} ${y}`;
+    } else {
+      path += `L${x} ${y}`;
+    }
+  }
+
+  return path;
 };
 
 const createEntitySvgMap = (dxf, options) => {
@@ -691,14 +720,23 @@ const createEntitySvgMap = (dxf, options) => {
     POLYLINE: (entity, vertices) => {
       const xs = vertices.map(v => $roundCoordinate(v, 10));
       const ys = vertices.map(v => -$roundCoordinate(v, 20));
+      const bulges = vertices.map(v => $roundCoordinate(v, 42) || 0);
       const flags = +(getGroupCodeValue(entity, 70) ?? 0);
-      const attrs = {
-        points: polylinePoints(xs, ys),
-        ...lineAttributes(entity)
-      };
-      return [flags & 1 ? jsx("polygon", { ...attrs
-      }) : jsx("polyline", { ...attrs
-      }), xs, ys];
+
+      if (bulges.some(Boolean)) {
+        return [jsx("path", {
+          d: bulgedPolylinePath(xs, ys, bulges) + (flags & 1 ? 'Z' : ''),
+          ...lineAttributes(entity)
+        }), xs, ys];
+      } else {
+        const attrs = {
+          points: polylinePoints(xs, ys),
+          ...lineAttributes(entity)
+        };
+        return [flags & 1 ? jsx("polygon", { ...attrs
+        }) : jsx("polyline", { ...attrs
+        }), xs, ys];
+      }
     },
     LWPOLYLINE: entity => {
       const xs = getGroupCodeValues(entity, 10).map(s => roundCoordinate(s));
