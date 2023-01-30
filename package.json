@@ -17,7 +17,7 @@
     "typecheck": "tsc -p .",
     "start": "npm-run-all -p watch:*",
     "watch:mjs": "rollup -c -w",
-    "watch:viewer": "esbuild --resolve-extensions=.ts,.mjs --bundle --minify --serve --servedir=viewer viewer/app.ts",
+    "watch:viewer": "esbuild --resolve-extensions=.ts,.mjs --bundle --minify --serve --outdir=viewer --servedir=viewer viewer/app.ts",
     "test": "node --harmony --es-module-specifier-resolution=node bin/dxf2svg.mjs sample/1.dxf"
   },
   "devDependencies": {
