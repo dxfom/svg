@@ -3,7 +3,7 @@ import { DxfReadonly, DxfRecordReadonly, getGroupCodeValue as $, getGroupCodeVal
 import { parseDxfMTextContent } from '@dxfom/mtext'
 import { DxfTextContentElement, parseDxfTextContent } from '@dxfom/text'
 import { Context } from './Context'
-import { collectDimensionStyles, dimensionValueToMText } from './dimension'
+import { collectDimensionStyles, parseDimensionText } from './dimension'
 import { collectHatchPathElements, hatchFill } from './hatch'
 import { MTEXT_angle, MTEXT_attachmentPoint, MTEXT_contents, MTEXT_contentsOptions } from './mtext'
 import { $number, $trim, escapeHtml, nearlyEqual, rotate, round, transforms, translate } from './util'
@@ -92,7 +92,7 @@ const bulgedPolylinePath = (xs: readonly number[], ys: readonly number[], bulges
   return path
 }
 
-const polyline = (
+const drawPolyline = (
   xs: number[],
   ys: number[],
   bulges: number[],
@@ -106,6 +106,24 @@ const polyline = (
     return [flags & 1 ? <polygon {...attrs} /> : <polyline {...attrs} />, xs, ys]
   }
 }
+
+const drawArrowEdge = (x1: number, y1: number, x2: number, y2: number, arrowSize: number): string => {
+  const angle = Math.atan2(y2 - y1, x2 - x1)
+  const halfArrowAngle = (Math.PI * 15) / 180
+  return (
+    <polygon
+      stroke="none"
+      fill="currentColor"
+      points={polylinePoints(
+        [x2, x2 - Math.cos(angle - halfArrowAngle) * arrowSize, x2 - Math.cos(angle + halfArrowAngle) * arrowSize],
+        [y2, y2 - Math.sin(angle - halfArrowAngle) * arrowSize, y2 - Math.sin(angle + halfArrowAngle) * arrowSize],
+      )}
+    />
+  )
+}
+
+const drawArrow = (x1: number, y1: number, x2: number, y2: number, arrowSize: number): string =>
+  <line x1={x1} y1={y1} x2={x2} y2={y2} /> + drawArrowEdge(x1, y1, x2, y2, arrowSize)
 
 const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOptions) => CreateEntitySvgMapResult = (dxf, options) => {
   const { warn, resolveColorIndex } = options
@@ -134,7 +152,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       return [<line x1={x1} y1={y1} x2={x2} y2={y2} {...lineAttributes(entity)} />, [x1, x2], [y1, y2]]
     },
     POLYLINE: (entity, vertices) =>
-      polyline(
+      drawPolyline(
         vertices.map(v => $roundCoordinate(v, 10)),
         vertices.map(v => -$roundCoordinate(v, 20)),
         vertices.map(v => $roundCoordinate(v, 42) || 0),
@@ -169,7 +187,7 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           }
         }
       }
-      return polyline(xs, ys, bulges, +($(entity, 70) ?? 0), lineAttributes(entity))
+      return drawPolyline(xs, ys, bulges, +($(entity, 70) ?? 0), lineAttributes(entity))
     },
     CIRCLE: entity => {
       const cx = $roundCoordinate(entity, 10)
@@ -299,19 +317,21 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
       ]
     },
     DIMENSION: entity => {
+      const dimensionType = $number(entity, 70, 0)
       const dimStyles = collectDimensionStyles(dxf, entity)
-      let lineElements = ''
-      let measurement: number
-      let dominantBaseline = 'text-after-edge'
-      let textAnchor = 'middle'
-      let angle: number | undefined
+      const arrowSize = dimStyles.DIMASZ * dimStyles.DIMSCALE
+      const textSize = dimStyles.DIMTXT * dimStyles.DIMSCALE
+      const halfTextSize = textSize / 2
+      const textColor = dimStyles.DIMCLRT
       const tx = $roundCoordinate(entity, 11)
       const ty = -$roundCoordinate(entity, 21)
       const x0 = $roundCoordinate(entity, 10)
       const y0 = -$roundCoordinate(entity, 20)
-      const xs = [tx]
-      const ys = [ty]
-      const dimensionType = $number(entity, 70, 0)
+      const xs = [tx - halfTextSize, tx + halfTextSize]
+      const ys = [ty - halfTextSize, ty + halfTextSize]
+      let lineElements: string
+      let textContent: string
+      let angle: number | undefined
       switch (dimensionType & 7) {
         case 0: // Rotated, Horizontal, or Vertical
         case 1: {
@@ -321,13 +341,30 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           const y3 = -$roundCoordinate(entity, 23)
           const y4 = -$roundCoordinate(entity, 24)
           angle = Math.round(-$number(entity, 50, 0) || 0)
-          if (angle % 180 === 0) {
-            measurement = Math.abs(x3 - x4)
-            lineElements = <path stroke="currentColor" d={`M${x3} ${y3}L${x3} ${y0}L${x4} ${y0}L${x4} ${y4}`} />
-            angle = 0
+          const vertical = x3 === x4 || angle % 180 !== 0
+          const distance = vertical ? Math.abs(y3 - y4) : Math.abs(x3 - x4)
+          textContent = parseDimensionText(distance, entity, dimStyles, options)
+          const textWidth = halfTextSize * textContent.length
+          const outside = distance < textWidth + arrowSize * 4
+          if (vertical) {
+            lineElements =
+              <line x1={x3} y1={y3} x2={x0} y2={y3} /> +
+              <line x1={x4} y1={y4} x2={x0} y2={y4} /> +
+              (outside
+                ? drawArrow(x0, y3 - arrowSize - arrowSize, x0, y3, arrowSize) +
+                  drawArrow(x0, y4 + arrowSize + arrowSize, x0, y4, arrowSize)
+                : drawArrow(x0, ty - (x0 === tx ? textWidth : 0), x0, y3, arrowSize) +
+                  drawArrow(x0, ty + (x0 === tx ? textWidth : 0), x0, y4, arrowSize))
           } else {
-            measurement = Math.abs(y3 - y4)
-            lineElements = <path stroke="currentColor" d={`M${x3} ${y3}L${x0} ${y3}L${x0} ${y4}L${x4} ${y4}`} />
+            lineElements =
+              <line x1={x3} y1={y3} x2={x3} y2={y0} /> +
+              <line x1={x4} y1={y4} x2={x4} y2={y0} /> +
+              (outside
+                ? drawArrow(x3 - arrowSize - arrowSize, y0, x3, y0, arrowSize) +
+                  drawArrow(x4 + arrowSize + arrowSize, y0, x4, y0, arrowSize)
+                : drawArrow(tx - (y0 === ty ? textWidth : 0), y0, x3, y0, arrowSize) +
+                  drawArrow(tx + (y0 === ty ? textWidth : 0), y0, x4, y0, arrowSize))
+            angle = 0
           }
           xs.push(x3, x4)
           ys.push(y3, y4)
@@ -337,13 +374,22 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
         case 5: // Angular 3-point
           warn('Angular dimension cannot be rendered yet.', entity)
           return
-        case 3: // Diameter
+        case 3: {
+          // Diameter
+          const x5 = $roundCoordinate(entity, 15)
+          const y5 = -$roundCoordinate(entity, 25)
+          textContent = parseDimensionText(Math.hypot(x0 - x5, y0 - y5), entity, dimStyles, options)
+          lineElements = drawArrow(x0, y0, x5, y5, arrowSize) + drawArrowEdge(x5, y5, x0, y0, arrowSize)
+          xs.push(x0, x5)
+          ys.push(y0, y5)
+          break
+        }
         case 4: {
           // Radius
           const x5 = $roundCoordinate(entity, 15)
           const y5 = -$roundCoordinate(entity, 25)
-          measurement = Math.hypot(x0 - x5, y0 - y5)
-          lineElements = <path stroke="currentColor" d={`M${x5} ${y5}L${tx} ${ty}`} />
+          textContent = parseDimensionText(Math.hypot(x0 - x5, y0 - y5), entity, dimStyles, options)
+          lineElements = drawArrow(x0, y0, x5, y5, arrowSize)
           xs.push(x0, x5)
           ys.push(y0, y5)
           break
@@ -355,15 +401,13 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           const y3 = -$roundCoordinate(entity, 23)
           const y4 = -$roundCoordinate(entity, 24)
           if (dimensionType & 64) {
-            measurement = Math.abs(x0 - +x3!)
+            textContent = parseDimensionText(Math.abs(x0 - +x3!), entity, dimStyles, options)
             lineElements = <path stroke="currentColor" d={`M${x3} ${y3}L${x3} ${y4}L${x4} ${y4}L${tx} ${ty}`} />
             angle = -90
           } else {
-            measurement = Math.abs(y0 - +y3!)
+            textContent = parseDimensionText(Math.abs(y0 - +y3!), entity, dimStyles, options)
             lineElements = <path stroke="currentColor" d={`M${x3} ${y3}L${x4} ${y3}L${x4} ${y4}L${tx} ${ty}`} />
           }
-          dominantBaseline = 'central'
-          textAnchor = 'middle'
           xs.push(x3, x4)
           ys.push(y3, y4)
           break
@@ -372,34 +416,27 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
           warn('Unknown dimension type.', entity)
           return
       }
-      let textElement: string
-      {
-        const mtext = dimensionValueToMText(measurement, entity, dimStyles)
-        const h = dimStyles.DIMTXT * dimStyles.DIMSCALE
-        const textColor = dimStyles.DIMCLRT
-        textElement = (
-          <text
-            x={tx}
-            y={ty}
-            fill={isNaN(textColor) ? context.color(entity) : textColor === 0 ? 'currentColor' : resolveColorIndex(textColor)}
-            font-size={h}
-            dominant-baseline={dominantBaseline}
-            text-anchor={textAnchor}
-            transform={rotate(angle, tx, ty)}
-          >
-            {MTEXT_contents(parseDxfMTextContent(mtext, options), options)}
-          </text>
-        )
-      }
       return [
         <g
           color={context.color(entity)}
+          stroke="currentColor"
           stroke-width={context.strokeWidth(entity)}
           stroke-dasharray={context.strokeDasharray(entity)}
           style={extrusionStyle(entity)}
           {...addAttributes(entity)}
         >
-          {lineElements + textElement}
+          {lineElements}
+          <text
+            x={tx}
+            y={ty}
+            fill={isNaN(textColor) ? context.color(entity) : textColor === 0 ? 'currentColor' : resolveColorIndex(textColor)}
+            font-size={textSize}
+            dominant-baseline="central"
+            text-anchor="middle"
+            transform={rotate(angle, tx, ty)}
+          >
+            {textContent}
+          </text>
         </g>,
         xs,
         ys,

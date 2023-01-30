@@ -1,8 +1,11 @@
 import { DxfReadonly, DxfRecordReadonly, getGroupCodeValue as $ } from '@dxfom/dxf'
+import { parseDxfMTextContent } from '@dxfom/mtext'
+import { MTEXT_contents, MTEXT_contentsOptions } from './mtext'
 import { $number, round } from './util'
 
 const DimStyles = {
   DIMSCALE: [40, 40, 1],
+  DIMASZ: [41, 40, 2.5],
   DIMTP: [47, 40, NaN],
   DIMTM: [48, 40, NaN],
   DIMTOL: [71, 70, 0],
@@ -46,7 +49,7 @@ export const collectDimensionStyles = (dxf: DxfReadonly, dimension: DxfRecordRea
 
 const toleranceString = (n: number) => (n > 0 ? '+' + n : n < 0 ? String(n) : ' 0')
 
-export const dimensionValueToMText = (measurement: number, dimension: DxfRecordReadonly, styles: DimensionStyles) => {
+const dimensionValueToMText = (measurement: number, dimension: DxfRecordReadonly, styles: DimensionStyles) => {
   const savedValue = $number(dimension, 42, -1)
   const value = round(savedValue !== -1 ? savedValue : measurement * styles.DIMLFAC, styles.DIMDEC)
   let valueWithTolerance = String(value)
@@ -64,3 +67,10 @@ export const dimensionValueToMText = (measurement: number, dimension: DxfRecordR
   const template = $(dimension, 1)
   return template ? template.replace(/<>/, valueWithTolerance) : valueWithTolerance
 }
+
+export const parseDimensionText = (
+  measurement: number,
+  dimension: DxfRecordReadonly,
+  styles: DimensionStyles,
+  options?: MTEXT_contentsOptions & { readonly encoding?: string | TextDecoder | undefined },
+) => MTEXT_contents(parseDxfMTextContent(dimensionValueToMText(measurement, dimension, styles), options), options)

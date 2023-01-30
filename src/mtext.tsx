@@ -4,8 +4,8 @@ import { $number, escapeHtml, round } from './util'
 
 export const MTEXT_attachmentPoint = (n: string | number | undefined) => {
   n = +n!
-  let dominantBaseline: string | undefined
-  let textAnchor: string | undefined
+  let dominantBaseline: 'text-before-edge' | 'central' | 'text-after-edge' | undefined
+  let textAnchor: 'middle' | 'end' | undefined
   switch (n) {
     case 1:
     case 2:

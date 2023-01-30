@@ -32,9 +32,7 @@ export const onDragDrop = (element: HTMLElement, listener: (file: File) => unkno
     event.stopPropagation()
     event.preventDefault()
     element.classList.remove('dragging')
-    const dataTransfer = event.dataTransfer
-    if (dataTransfer) {
-      listener(dataTransfer.files[0])
-    }
+    const file = event.dataTransfer?.files[0]
+    file && listener(file)
   })
 }

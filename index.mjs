@@ -135,8 +135,163 @@ class Context {
 
 }
 
+const jsx = (type, props) => {
+  let s = '<' + type;
+  let children;
+
+  for (const [key, value] of Object.entries(props)) {
+    if (!value && value !== 0) {
+      continue;
+    }
+
+    if (key === 'children') {
+      children = value;
+    } else {
+      s += ` ${key}="${typeof value === 'string' ? escapeHtml(value) : value}"`;
+    }
+  }
+
+  if (type === 'line' || type === 'polyline' || type === 'polygon' || type === 'circle' || type === 'ellipse' || type === 'path') {
+    if (!props.fill) {
+      s += ' fill="none"';
+    }
+
+    s += ' vector-effect="non-scaling-stroke"';
+  }
+
+  if (type === 'text') {
+    s += ' stroke="none" style="white-space:pre"';
+  }
+
+  if (children) {
+    s += `>${Array.isArray(children) ? children.flat(Infinity).join('') : children}</${type}>`;
+  } else {
+    s += '/>';
+  }
+
+  return s;
+};
+const jsxs = jsx;
+
+const MTEXT_attachmentPoint = n => {
+  n = +n;
+  let dominantBaseline;
+  let textAnchor;
+
+  switch (n) {
+    case 1:
+    case 2:
+    case 3:
+      dominantBaseline = 'text-before-edge';
+      break;
+
+    case 4:
+    case 5:
+    case 6:
+      dominantBaseline = 'central';
+      break;
+
+    case 7:
+    case 8:
+    case 9:
+      dominantBaseline = 'text-after-edge';
+      break;
+  }
+
+  switch (n % 3) {
+    case 2:
+      textAnchor = 'middle';
+      break;
+
+    case 0:
+      textAnchor = 'end';
+      break;
+  }
+
+  return {
+    dominantBaseline,
+    textAnchor
+  };
+};
+
+const yx2angle = (y, x) => round$1(Math.atan2(y || 0, x || 0) * 180 / Math.PI, 5) || 0;
+
+const MTEXT_angle = mtext => {
+  for (let i = mtext.length - 1; i >= 0; i--) {
+    switch (mtext[i][0]) {
+      case 50:
+        return round$1(mtext[i][1], 5) || 0;
+
+      case 11:
+        return yx2angle($number(mtext, 12), +mtext[i][1]);
+
+      case 21:
+        return yx2angle(+mtext[i][1], $number(mtext, 11));
+    }
+  }
+
+  return 0;
+};
+const MTEXT_contents = (contents, options, i = 0) => {
+  if (contents.length <= i) {
+    return '';
+  }
+
+  const restContents = MTEXT_contents(contents, options, i + 1);
+  const content = contents[i];
+
+  if (typeof content === 'string') {
+    return escapeHtml(content) + restContents;
+  }
+
+  if (Array.isArray(content)) {
+    return MTEXT_contents(content, options) + restContents;
+  }
+
+  if (content.S) {
+    return jsxs("tspan", {
+      children: [jsx("tspan", {
+        dy: "-.5em",
+        children: escapeHtml(content.S[0])
+      }), jsx("tspan", {
+        dy: "1em",
+        dx: content.S[0].length / -2 + 'em',
+        children: escapeHtml(content.S[2])
+      })]
+    }) + restContents;
+  }
+
+  if (content.f) {
+    const _font = {
+      family: content.f,
+      weight: content.b ? 700 : 400,
+      style: content.i ? 'italic' : undefined
+    };
+
+    const font = options?.resolveFont?.(_font) ?? _font;
+
+    return jsx("tspan", {
+      "font-family": font.family,
+      "font-weight": font.weight,
+      "font-style": font.style,
+      "font-size": font.scale && font.scale !== 1 ? font.scale + 'em' : undefined,
+      children: restContents
+    });
+  }
+
+  if (content.Q) {
+    return jsx("tspan", {
+      "font-style": `oblique ${content.Q}deg`,
+      children: restContents
+    });
+  }
+
+  return restContents;
+};
+
 const DimStyles = {
   DIMSCALE: [40, 40, 1],
+  DIMASZ: [41, 40, 2.5],
   DIMTP: [47, 40, NaN],
   DIMTM: [48, 40, NaN],
   DIMTOL: [71, 70, 0],
@@ -204,43 +359,7 @@ const dimensionValueToMText = (measurement, dimension, styles) => {
   return template ? template.replace(/<>/, valueWithTolerance) : valueWithTolerance;
 };
 
-const jsx = (type, props) => {
-  let s = '<' + type;
-  let children;
-
-  for (const [key, value] of Object.entries(props)) {
-    if (!value && value !== 0) {
-      continue;
-    }
-
-    if (key === 'children') {
-      children = value;
-    } else {
-      s += ` ${key}="${typeof value === 'string' ? escapeHtml(value) : value}"`;
-    }
-  }
-
-  if (type === 'line' || type === 'polyline' || type === 'polygon' || type === 'circle' || type === 'ellipse' || type === 'path') {
-    if (!props.fill) {
-      s += ' fill="none"';
-    }
-
-    s += ' vector-effect="non-scaling-stroke"';
-  }
-
-  if (type === 'text') {
-    s += ' stroke="none" style="white-space:pre"';
-  }
-
-  if (children) {
-    s += `>${Array.isArray(children) ? children.flat(Infinity).join('') : children}</${type}>`;
-  } else {
-    s += '/>';
-  }
-
-  return s;
-};
-const jsxs = jsx;
+const parseDimensionText = (measurement, dimension, styles, options) => MTEXT_contents(parseDxfMTextContent(dimensionValueToMText(measurement, dimension, styles), options), options);
 
 const round = n => round$1(n, 6);
 
@@ -481,122 +600,6 @@ const hatchFill = (hatch, paths, context) => {
   }
 };
 
-const MTEXT_attachmentPoint = n => {
-  n = +n;
-  let dominantBaseline;
-  let textAnchor;
-
-  switch (n) {
-    case 1:
-    case 2:
-    case 3:
-      dominantBaseline = 'text-before-edge';
-      break;
-
-    case 4:
-    case 5:
-    case 6:
-      dominantBaseline = 'central';
-      break;
-
-    case 7:
-    case 8:
-    case 9:
-      dominantBaseline = 'text-after-edge';
-      break;
-  }
-
-  switch (n % 3) {
-    case 2:
-      textAnchor = 'middle';
-      break;
-
-    case 0:
-      textAnchor = 'end';
-      break;
-  }
-
-  return {
-    dominantBaseline,
-    textAnchor
-  };
-};
-
-const yx2angle = (y, x) => round$1(Math.atan2(y || 0, x || 0) * 180 / Math.PI, 5) || 0;
-
-const MTEXT_angle = mtext => {
-  for (let i = mtext.length - 1; i >= 0; i--) {
-    switch (mtext[i][0]) {
-      case 50:
-        return round$1(mtext[i][1], 5) || 0;
-
-      case 11:
-        return yx2angle($number(mtext, 12), +mtext[i][1]);
-
-      case 21:
-        return yx2angle(+mtext[i][1], $number(mtext, 11));
-    }
-  }
-
-  return 0;
-};
-const MTEXT_contents = (contents, options, i = 0) => {
-  if (contents.length <= i) {
-    return '';
-  }
-
-  const restContents = MTEXT_contents(contents, options, i + 1);
-  const content = contents[i];
-
-  if (typeof content === 'string') {
-    return escapeHtml(content) + restContents;
-  }
-
-  if (Array.isArray(content)) {
-    return MTEXT_contents(content, options) + restContents;
-  }
-
-  if (content.S) {
-    return jsxs("tspan", {
-      children: [jsx("tspan", {
-        dy: "-.5em",
-        children: escapeHtml(content.S[0])
-      }), jsx("tspan", {
-        dy: "1em",
-        dx: content.S[0].length / -2 + 'em',
-        children: escapeHtml(content.S[2])
-      })]
-    }) + restContents;
-  }
-
-  if (content.f) {
-    const _font = {
-      family: content.f,
-      weight: content.b ? 700 : 400,
-      style: content.i ? 'italic' : undefined
-    };
-
-    const font = options?.resolveFont?.(_font) ?? _font;
-
-    return jsx("tspan", {
-      "font-family": font.family,
-      "font-weight": font.weight,
-      "font-style": font.style,
-      "font-size": font.scale && font.scale !== 1 ? font.scale + 'em' : undefined,
-      children: restContents
-    });
-  }
-
-  if (content.Q) {
-    return jsx("tspan", {
-      "font-style": `oblique ${content.Q}deg`,
-      children: restContents
-    });
-  }
-
-  return restContents;
-};
-
 const defaultOptions = {
   warn: console.debug,
   resolveColorIndex: colorIndex => DXF_COLOR_HEX[colorIndex] ?? '#888',
@@ -679,7 +682,7 @@ const bulgedPolylinePath = (xs, ys, bulges) => {
   return path;
 };
 
-const polyline = (xs, ys, bulges, flags, attributes) => {
+const drawPolyline = (xs, ys, bulges, flags, attributes) => {
   if (bulges.some(Boolean)) {
     return [jsx("path", {
       d: bulgedPolylinePath(xs, ys, bulges) + (flags & 1 ? 'Z' : ''),
@@ -695,6 +698,23 @@ const polyline = (xs, ys, bulges, flags, attributes) => {
     }), xs, ys];
   }
 };
+
+const drawArrowEdge = (x1, y1, x2, y2, arrowSize) => {
+  const angle = Math.atan2(y2 - y1, x2 - x1);
+  const halfArrowAngle = Math.PI * 15 / 180;
+  return jsx("polygon", {
+    stroke: "none",
+    fill: "currentColor",
+    points: polylinePoints([x2, x2 - Math.cos(angle - halfArrowAngle) * arrowSize, x2 - Math.cos(angle + halfArrowAngle) * arrowSize], [y2, y2 - Math.sin(angle - halfArrowAngle) * arrowSize, y2 - Math.sin(angle + halfArrowAngle) * arrowSize])
+  });
+};
+
+const drawArrow = (x1, y1, x2, y2, arrowSize) => jsx("line", {
+  x1: x1,
+  y1: y1,
+  x2: x2,
+  y2: y2
+}) + drawArrowEdge(x1, y1, x2, y2, arrowSize);
 
 const createEntitySvgMap = (dxf, options) => {
   const {
@@ -734,7 +754,7 @@ const createEntitySvgMap = (dxf, options) => {
         ...lineAttributes(entity)
       }), [x1, x2], [y1, y2]];
     },
-    POLYLINE: (entity, vertices) => polyline(vertices.map(v => $roundCoordinate(v, 10)), vertices.map(v => -$roundCoordinate(v, 20)), vertices.map(v => $roundCoordinate(v, 42) || 0), +(getGroupCodeValue(entity, 70) ?? 0), lineAttributes(entity)),
+    POLYLINE: (entity, vertices) => drawPolyline(vertices.map(v => $roundCoordinate(v, 10)), vertices.map(v => -$roundCoordinate(v, 20)), vertices.map(v => $roundCoordinate(v, 42) || 0), +(getGroupCodeValue(entity, 70) ?? 0), lineAttributes(entity)),
     LWPOLYLINE: entity => {
       const xs = [];
       const ys = [];
@@ -769,7 +789,7 @@ const createEntitySvgMap = (dxf, options) => {
         }
       }
 
-      return polyline(xs, ys, bulges, +(getGroupCodeValue(entity, 70) ?? 0), lineAttributes(entity));
+      return drawPolyline(xs, ys, bulges, +(getGroupCodeValue(entity, 70) ?? 0), lineAttributes(entity));
     },
     CIRCLE: entity => {
       const cx = $roundCoordinate(entity, 10);
@@ -919,19 +939,21 @@ const createEntitySvgMap = (dxf, options) => {
       }), [x, x + h * contents.length], [y, y + h]];
     },
     DIMENSION: entity => {
+      const dimensionType = $number(entity, 70, 0);
       const dimStyles = collectDimensionStyles(dxf, entity);
-      let lineElements = '';
-      let measurement;
-      let dominantBaseline = 'text-after-edge';
-      let textAnchor = 'middle';
-      let angle;
+      const arrowSize = dimStyles.DIMASZ * dimStyles.DIMSCALE;
+      const textSize = dimStyles.DIMTXT * dimStyles.DIMSCALE;
+      const halfTextSize = textSize / 2;
+      const textColor = dimStyles.DIMCLRT;
       const tx = $roundCoordinate(entity, 11);
       const ty = -$roundCoordinate(entity, 21);
       const x0 = $roundCoordinate(entity, 10);
       const y0 = -$roundCoordinate(entity, 20);
-      const xs = [tx];
-      const ys = [ty];
-      const dimensionType = $number(entity, 70, 0);
+      const xs = [tx - halfTextSize, tx + halfTextSize];
+      const ys = [ty - halfTextSize, ty + halfTextSize];
+      let lineElements;
+      let textContent;
+      let angle;
 
       switch (dimensionType & 7) {
         case 0: // Rotated, Horizontal, or Vertical
@@ -944,20 +966,37 @@ const createEntitySvgMap = (dxf, options) => {
             const y3 = -$roundCoordinate(entity, 23);
             const y4 = -$roundCoordinate(entity, 24);
             angle = Math.round(-$number(entity, 50, 0) || 0);
+            const vertical = x3 === x4 || angle % 180 !== 0;
+            const distance = vertical ? Math.abs(y3 - y4) : Math.abs(x3 - x4);
+            textContent = parseDimensionText(distance, entity, dimStyles, options);
+            const textWidth = halfTextSize * textContent.length;
+            const outside = distance < textWidth + arrowSize * 4;
 
-            if (angle % 180 === 0) {
-              measurement = Math.abs(x3 - x4);
-              lineElements = jsx("path", {
-                stroke: "currentColor",
-                d: `M${x3} ${y3}L${x3} ${y0}L${x4} ${y0}L${x4} ${y4}`
-              });
-              angle = 0;
+            if (vertical) {
+              lineElements = jsx("line", {
+                x1: x3,
+                y1: y3,
+                x2: x0,
+                y2: y3
+              }) + jsx("line", {
+                x1: x4,
+                y1: y4,
+                x2: x0,
+                y2: y4
+              }) + (outside ? drawArrow(x0, y3 - arrowSize - arrowSize, x0, y3, arrowSize) + drawArrow(x0, y4 + arrowSize + arrowSize, x0, y4, arrowSize) : drawArrow(x0, ty - (x0 === tx ? textWidth : 0), x0, y3, arrowSize) + drawArrow(x0, ty + (x0 === tx ? textWidth : 0), x0, y4, arrowSize));
             } else {
-              measurement = Math.abs(y3 - y4);
-              lineElements = jsx("path", {
-                stroke: "currentColor",
-                d: `M${x3} ${y3}L${x0} ${y3}L${x0} ${y4}L${x4} ${y4}`
-              });
+              lineElements = jsx("line", {
+                x1: x3,
+                y1: y3,
+                x2: x3,
+                y2: y0
+              }) + jsx("line", {
+                x1: x4,
+                y1: y4,
+                x2: x4,
+                y2: y0
+              }) + (outside ? drawArrow(x3 - arrowSize - arrowSize, y0, x3, y0, arrowSize) + drawArrow(x4 + arrowSize + arrowSize, y0, x4, y0, arrowSize) : drawArrow(tx - (y0 === ty ? textWidth : 0), y0, x3, y0, arrowSize) + drawArrow(tx + (y0 === ty ? textWidth : 0), y0, x4, y0, arrowSize));
+              angle = 0;
             }
 
             xs.push(x3, x4);
@@ -972,18 +1011,25 @@ const createEntitySvgMap = (dxf, options) => {
           warn('Angular dimension cannot be rendered yet.', entity);
           return;
 
-        case 3: // Diameter
+        case 3:
+          {
+            // Diameter
+            const x5 = $roundCoordinate(entity, 15);
+            const y5 = -$roundCoordinate(entity, 25);
+            textContent = parseDimensionText(Math.hypot(x0 - x5, y0 - y5), entity, dimStyles, options);
+            lineElements = drawArrow(x0, y0, x5, y5, arrowSize) + drawArrowEdge(x5, y5, x0, y0, arrowSize);
+            xs.push(x0, x5);
+            ys.push(y0, y5);
+            break;
+          }
 
         case 4:
           {
             // Radius
             const x5 = $roundCoordinate(entity, 15);
             const y5 = -$roundCoordinate(entity, 25);
-            measurement = Math.hypot(x0 - x5, y0 - y5);
-            lineElements = jsx("path", {
-              stroke: "currentColor",
-              d: `M${x5} ${y5}L${tx} ${ty}`
-            });
+            textContent = parseDimensionText(Math.hypot(x0 - x5, y0 - y5), entity, dimStyles, options);
+            lineElements = drawArrow(x0, y0, x5, y5, arrowSize);
             xs.push(x0, x5);
             ys.push(y0, y5);
             break;
@@ -998,22 +1044,20 @@ const createEntitySvgMap = (dxf, options) => {
             const y4 = -$roundCoordinate(entity, 24);
 
             if (dimensionType & 64) {
-              measurement = Math.abs(x0 - +x3);
+              textContent = parseDimensionText(Math.abs(x0 - +x3), entity, dimStyles, options);
               lineElements = jsx("path", {
                 stroke: "currentColor",
                 d: `M${x3} ${y3}L${x3} ${y4}L${x4} ${y4}L${tx} ${ty}`
               });
               angle = -90;
             } else {
-              measurement = Math.abs(y0 - +y3);
+              textContent = parseDimensionText(Math.abs(y0 - +y3), entity, dimStyles, options);
               lineElements = jsx("path", {
                 stroke: "currentColor",
                 d: `M${x3} ${y3}L${x4} ${y3}L${x4} ${y4}L${tx} ${ty}`
               });
             }
 
-            dominantBaseline = 'central';
-            textAnchor = 'middle';
             xs.push(x3, x4);
             ys.push(y3, y4);
             break;
@@ -1024,29 +1068,23 @@ const createEntitySvgMap = (dxf, options) => {
           return;
       }
 
-      let textElement;
-      {
-        const mtext = dimensionValueToMText(measurement, entity, dimStyles);
-        const h = dimStyles.DIMTXT * dimStyles.DIMSCALE;
-        const textColor = dimStyles.DIMCLRT;
-        textElement = jsx("text", {
-          x: tx,
-          y: ty,
-          fill: isNaN(textColor) ? context.color(entity) : textColor === 0 ? 'currentColor' : resolveColorIndex(textColor),
-          "font-size": h,
-          "dominant-baseline": dominantBaseline,
-          "text-anchor": textAnchor,
-          transform: rotate(angle, tx, ty),
-          children: MTEXT_contents(parseDxfMTextContent(mtext, options), options)
-        });
-      }
-      return [jsx("g", {
+      return [jsxs("g", {
         color: context.color(entity),
+        stroke: "currentColor",
         "stroke-width": context.strokeWidth(entity),
         "stroke-dasharray": context.strokeDasharray(entity),
         style: extrusionStyle(entity),
         ...addAttributes(entity),
-        children: lineElements + textElement
+        children: [lineElements, jsx("text", {
+          x: tx,
+          y: ty,
+          fill: isNaN(textColor) ? context.color(entity) : textColor === 0 ? 'currentColor' : resolveColorIndex(textColor),
+          "font-size": textSize,
+          "dominant-baseline": "central",
+          "text-anchor": "middle",
+          transform: rotate(angle, tx, ty),
+          children: textContent
+        })]
       }), xs, ys];
     },
     ACAD_TABLE: entity => {

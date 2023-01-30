@@ -5,5 +5,10 @@
   "editor.formatOnSave": true,
   "[markdown]": {
     "editor.formatOnSave": false
+  },
+  "search.exclude": {
+    "**/node_modules": true,
+    "/index.mjs": true,
+    "/index.d.ts": true
   }
 }
