@@ -131,7 +131,6 @@ const createEntitySvgMap: (dxf: DxfReadonly, options: CreateSvgContentStringOpti
   const roundCoordinate: typeof context.roundCoordinate = n => context.roundCoordinate(n)
   const $roundCoordinate = (entity: DxfRecordReadonly, groupCode: number) => roundCoordinate($(entity, groupCode))
 
-  // prettier-ignore
   const addAttributes = options.addAttributes ?? (() => undefined)
   const lineAttributes = (entity: DxfRecordReadonly) => ({
     fill: 'none',
