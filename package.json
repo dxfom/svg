@@ -11,26 +11,23 @@
   "module": "index.mjs",
   "types": "index.d.ts",
   "scripts": {
-    "build": "npm-run-all -p typecheck build:*",
+    "build": "npm-run-all -p build:*",
     "build:mjs": "rollup -c",
-    "build:dts": "dts-bundle-generator --no-banner --inline-declare-externals -o index.d.ts src/index.ts",
-    "typecheck": "tsc -p .",
+    "build:dts": "dts-bundle-generator --no-banner -o index.d.ts src/index.ts",
+    "build:check": "tsc -p .",
     "start": "npm-run-all -p watch:*",
     "watch:mjs": "rollup -c -w",
-    "watch:viewer": "esbuild --resolve-extensions=.ts,.mjs --bundle --minify --serve --outdir=viewer --servedir=viewer viewer/app.ts",
+    "watch:serve": "esbuild viewer/app.ts --servedir=viewer --outdir=viewer --bundle --resolve-extensions=.ts,.mjs",
     "test": "node --harmony --es-module-specifier-resolution=node bin/dxf2svg.mjs sample/1.dxf"
   },
   "devDependencies": {
-    "@babel/core": "^7.20.12",
-    "@babel/plugin-transform-react-jsx": "^7.20.13",
-    "@babel/preset-typescript": "^7.18.6",
-    "@rollup/plugin-babel": "^6.0.3",
     "@rollup/plugin-node-resolve": "^15.0.1",
     "dts-bundle-generator": "^7.2.0",
     "esbuild": "^0.17.5",
     "npm-run-all": "^4.1.5",
-    "rollup": "^3.12.0",
-    "typescript": "^4.9.4"
+    "rollup": "^3.13.0",
+    "rollup-plugin-esbuild": "^5.0.0",
+    "typescript": "^4.9.5"
   },
   "dependencies": {
     "@dxfom/color": "^0.1.1",
