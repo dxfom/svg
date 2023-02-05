@@ -5,12 +5,15 @@
     <style>
       * { margin: 0; box-sizing: border-box; }
       html, body, svg { height: 100%; }
-      header { display: flex; }
-      body { display: grid; grid-template-rows: max-content 1fr; }
+      body { display: grid; grid-template-columns: 1fr 240px; }
       main { overflow: hidden; }
+      aside { display: flex; flex-direction: column; padding: 8px; gap: 8px; }
+      .history { list-style: none; padding: 0; }
+      .history > li { cursor: pointer; color: #0af; text-decoration: underline; white-space: nowrap }
       svg { width: 100%; vertical-align: middle; }
       .dark { background: #123; }
       .button {
+        text-align: center;
         font: inherit;
         border: 1px solid #ccc;
         padding: 4px 8px;
@@ -21,14 +24,15 @@
     </style>
   </head>
   <body>
-    <header>
+    <main></main>
+    <aside>
+      <button class="button" type="button" onclick="document.body.classList.toggle('dark')">Toggle Dark</button>
       <label class="button">
         <input type="file" accept=".dxf" hidden>
         Select File...
       </label>
-      <button class="button" type="button" onclick="document.body.classList.toggle('dark')">Toggle Dark</button>
-    </header>
-    <main></main>
+      <ul class="history"></ul>
+    </aside>
     <script src="app.js"></script>
   </body>
 </html>
