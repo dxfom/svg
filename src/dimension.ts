@@ -1,7 +1,7 @@
-import { DxfReadonly, DxfRecordReadonly, getGroupCodeValue as $ } from '@dxfom/dxf'
+import { getGroupCodeValue as $, DxfReadonly, DxfRecordReadonly } from '@dxfom/dxf'
 import { parseDxfMTextContent } from '@dxfom/mtext'
 import { MTEXT_contents, MTEXT_contentsOptions } from './mtext'
-import { $number, round } from './util'
+import { $number } from './util'
 
 const DimStyles = {
   DIMSCALE: [40, 40, 1],
@@ -11,8 +11,11 @@ const DimStyles = {
   DIMTOL: [71, 70, 0],
   DIMTXT: [140, 40, 1],
   DIMLFAC: [144, 40, 1],
-  DIMCLRT: [178, 70, NaN],
-  DIMDEC: [271, 70, 4],
+  DIMCLRD: [176, 70, 0],
+  DIMCLRT: [178, 70, 0],
+  DIMADEC: [179, 70, 0],
+  DIMDEC: [271, 70, 2],
+  DIMLWD: [371, 70, -2],
 } as const
 
 type MutableDimensionStyles = { -readonly [K in keyof typeof DimStyles]: number }
@@ -50,22 +53,26 @@ export const collectDimensionStyles = (dxf: DxfReadonly, dimension: DxfRecordRea
 const toleranceString = (n: number) => (n > 0 ? '+' + n : n < 0 ? String(n) : ' 0')
 
 const dimensionValueToMText = (measurement: number, dimension: DxfRecordReadonly, styles: DimensionStyles) => {
+  const dimensionType = $number(dimension, 70, 0) & 7
   const savedValue = $number(dimension, 42, -1)
-  const value = round(savedValue !== -1 ? savedValue : measurement * styles.DIMLFAC, styles.DIMDEC)
-  let valueWithTolerance = String(value)
+  let value =
+    dimensionType === 2 || dimensionType === 5
+      ? (((savedValue !== -1 ? savedValue : measurement) * 180) / Math.PI).toFixed(styles.DIMADEC !== -1 ? styles.DIMADEC : styles.DIMDEC) +
+        '°'
+      : (savedValue !== -1 ? savedValue : measurement * styles.DIMLFAC).toFixed(styles.DIMDEC)
   if (styles.DIMTOL) {
     const p = styles.DIMTP
     const n = styles.DIMTM
     if (p || n) {
       if (p === n) {
-        valueWithTolerance = `${value}  ±${p}`
+        value += `  ±${p}`
       } else {
-        valueWithTolerance = `${value}  {\\S${toleranceString(p)}^${toleranceString(-n)};}`
+        value += `  {\\S${toleranceString(p)}^${toleranceString(-n)};}`
       }
     }
   }
   const template = $(dimension, 1)
-  return template ? template.replace(/<>/, valueWithTolerance) : valueWithTolerance
+  return template ? template.replace(/<>/, value) : value
 }
 
 export const parseDimensionText = (

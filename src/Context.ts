@@ -1,4 +1,4 @@
-import { DxfReadonly, DxfRecordReadonly, getGroupCodeValue as $, getGroupCodeValues as $$ } from '@dxfom/dxf'
+import { getGroupCodeValue as $, getGroupCodeValues as $$, DxfReadonly, DxfRecordReadonly } from '@dxfom/dxf'
 import { $number, $trim, resolveStrokeDasharray, round } from './util'
 
 export interface ContextOptions {
@@ -30,7 +30,7 @@ export class Context {
       this.layerMap.set($(layer, 2)!, {
         color: options.resolveColorIndex(+$(layer, 62)!),
         ltype: $(layer, 6),
-        strokeWidth: isNaN(strokeWidth) ? undefined : strokeWidth,
+        strokeWidth: isNaN(strokeWidth) || strokeWidth < 0 ? undefined : strokeWidth,
       })
     }
 
