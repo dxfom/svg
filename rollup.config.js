@@ -5,7 +5,7 @@ export default {
   input: 'src/index.ts',
   output: {
     format: 'es',
-    file: 'index.mjs',
+    file: 'index.js',
   },
   external: id => id.startsWith('@dxfom/'),
   plugins: [

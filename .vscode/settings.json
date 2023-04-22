@@ -8,7 +8,7 @@
   },
   "search.exclude": {
     "**/node_modules": true,
-    "/index.mjs": true,
+    "/index.js": true,
     "/index.d.ts": true
   }
 }

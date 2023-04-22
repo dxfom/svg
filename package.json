@@ -7,33 +7,32 @@
   "keywords": [
     "dxf"
   ],
-  "main": "index.mjs",
-  "module": "index.mjs",
+  "type": "module",
+  "main": "index.js",
+  "module": "index.js",
   "types": "index.d.ts",
   "scripts": {
     "build": "npm-run-all -p build:*",
-    "build:mjs": "rollup -c",
+    "build:js": "rollup -c",
     "build:dts": "dts-bundle-generator --no-banner -o index.d.ts src/index.ts",
     "build:check": "tsc -p .",
-    "start": "npm-run-all -p watch:*",
-    "watch:mjs": "rollup -c -w",
-    "watch:serve": "esbuild viewer/app.ts --servedir=viewer --outdir=viewer --bundle --resolve-extensions=.ts,.mjs",
-    "test": "node --harmony --es-module-specifier-resolution=node bin/dxf2svg.mjs sample/1.dxf"
+    "start": "esbuild viewer/app.ts --servedir=viewer --outdir=viewer --bundle",
+    "test": "node --harmony --es-module-specifier-resolution=node bin/dxf2svg.js sample/1.dxf"
   },
   "devDependencies": {
-    "@rollup/plugin-node-resolve": "^15.0.1",
-    "dts-bundle-generator": "^7.2.0",
-    "esbuild": "^0.17.5",
+    "@rollup/plugin-node-resolve": "^15.0.2",
+    "dts-bundle-generator": "^8.0.1",
+    "esbuild": "^0.17.17",
     "npm-run-all": "^4.1.5",
-    "rollup": "^3.13.0",
+    "rollup": "^3.20.7",
     "rollup-plugin-esbuild": "^5.0.0",
-    "typescript": "^4.9.5"
+    "typescript": "^5.0.4"
   },
   "dependencies": {
-    "@dxfom/color": "^0.1.1",
-    "@dxfom/dxf": "^0.0.2",
-    "@dxfom/mtext": "^0.3.2",
-    "@dxfom/text": "^0.2.0"
+    "@dxfom/color": "^0.2.0",
+    "@dxfom/dxf": "^0.2.0",
+    "@dxfom/mtext": "^0.4.0",
+    "@dxfom/text": "^0.3.0"
   },
   "prettier": {
     "printWidth": 140,
